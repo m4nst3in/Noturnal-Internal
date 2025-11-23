@@ -1,164 +1,222 @@
 #include "CTrajectoryPhysics.hpp"
 
+// Includes da sua SDK e Helpers
 #include <CS2/SDK/SDK.hpp>
 #include <CS2/SDK/Update/GameTrace.hpp>
 #include <CS2/SDK/FunctionListSDK.hpp>
+#include <CS2/SDK/Math/Math.hpp>
+
+// Seus sistemas
 #include <GameClient/CL_Players.hpp>
 #include <GameClient/CL_Weapons.hpp>
-#include <cmath>
+#include <GameClient/CL_ItemDefinition.hpp> 
 
-// Configurações de Física da Source 2
+#include <cmath>
+#include <algorithm> 
+
+// =========================================================
+// CONFIGURAÇÕES
+// =========================================================
 #define TICK_INTERVAL           0.015625f 
 #define TIME_TO_TICKS( dt )     ( (int)( 0.5f + (float)(dt) / TICK_INTERVAL ) )
 
-// Matemática Auxiliar para Reflexão (PhysicsClipVelocity da Source Engine)
+// Cache Global
+static std::vector<GrenadePathNode> g_CachedPath;
+static QAngle g_LastAngles = { 0.f, 0.f, 0.f };
+static Vector3 g_LastPos = { 0.f, 0.f, 0.f };
+static int g_LastWeaponID = -1;
+static bool g_LastAttack1 = false;
+static bool g_LastAttack2 = false;
+
+// =========================================================
+// HELPERS LOCAIS
+// =========================================================
+
+// Calcula distância ao quadrado entre dois Vectors (Usando sua SDK)
+float DistSqrVec(const Vector3& a, const Vector3& b) {
+    Vector3 delta = a;
+    delta.Subtract(b);
+    return delta.LengthSquared();
+}
+
+// Calcula distância ao quadrado entre dois QAngles (Usando sua SDK)
+float DistSqrAng(const QAngle& a, const QAngle& b) {
+    QAngle delta = a;
+    delta.Subtract(b);
+    return delta.LengthSquared();
+}
+
+// =========================================================
+// FÍSICA E HELPERS
+// =========================================================
+
 int CTrajectoryPhysics::PhysicsClipVelocity(const Vector3& in, const Vector3& normal, Vector3& out, float overbounce)
 {
     float backoff = in.Dot(normal) * overbounce;
-    for (int i = 0; i < 3; i++)
-    {
-        float change = normal[i] * backoff;
-        out[i] = in[i] - change;
-        if (out[i] > -0.1f && out[i] < 0.1f) out[i] = 0.0f; // Fix precisão
-    }
+
+    // SDK: out = in - (normal * backoff)
+    Vector3 change = normal; 
+    change.Multiplyf(backoff);
     
+    out = in;
+    out.Subtract(change);
+
+    // Correção de precisão
+    if (out.m_x > -0.1f && out.m_x < 0.1f) out.m_x = 0.0f;
+    if (out.m_y > -0.1f && out.m_y < 0.1f) out.m_y = 0.0f;
+    if (out.m_z > -0.1f && out.m_z < 0.1f) out.m_z = 0.0f;
+
     float adjust = out.Dot(normal);
-    if (adjust < 0.0f) out -= (normal * adjust);
+    if (adjust < 0.0f)
+    {
+        Vector3 adj = normal;
+        adj.Multiplyf(adjust);
+        out.Subtract(adj);
+    }
     return 0;
 }
 
-void CTrajectoryPhysics::SetupPhysics(C_CSWeaponBase* pWeapon, float& flSpeed, float& flGravity, float& flElasticity, float& flFriction, float& flDrag)
+void CTrajectoryPhysics::SetupPhysics(int nWeaponID, float& flSpeed, float& flGravity, float& flElasticity, float& flFriction)
 {
-    // Valores padrão
-    flSpeed = 1000.0f;      // HE/Flash
-    flGravity = 800.0f;     // Gravidade padrão sv_gravity
-    flElasticity = 0.45f;   // Quique
-    flFriction = 0.2f;      // Atrito no chão
-    flDrag = 0.0f;          // Arrasto do ar (Smokes novas são pesadas)
+    flSpeed = 1000.0f; flGravity = 800.0f; flElasticity = 0.45f; flFriction = 0.2f;      
 
-    if (!pWeapon) return;
-
-    // Tente pegar o Index ou Nome da arma. 
-    // Como não tenho sua classe C_CSWeaponBase completa, vou assumir pelo ID ou Nome
-    // Adapte essa parte para como você pega o ID da arma (m_iItemDefinitionIndex)
-    
-    int nIndex = pWeapon->m_AttributeManager().m_Item().m_iItemDefinitionIndex();
-    
-    /* IDs (Exemplo):
-       WEAPON_FLASHBANG = 43
-       WEAPON_HEGRENADE = 44
-       WEAPON_SMOKEGRENADE = 45
-       WEAPON_MOLOTOV = 46
-       WEAPON_DECOY = 47
-       WEAPON_INCGRENADE = 48
-    */
-
-    if (nIndex == 45) { // SMOKE
-         // Smokes no CS2 são um pouco diferentes, mas a física base é similar
-         flElasticity = 0.3f; // Quica menos
-    }
-    else if (nIndex == 46 || nIndex == 48) { // MOLOTOV / INCENDIARY
-         flSpeed = 750.0f; // Mais lento
-         flElasticity = 0.35f;
-    }
-    else if (nIndex == 47) { // DECOY
-         flElasticity = 0.5f; // Quica muito
+    switch (nWeaponID)
+    {
+    case WEAPON_SMOKE_GRENADE: flElasticity = 0.3f; break;
+    case WEAPON_MOLOTOV:
+    case WEAPON_INCENDIARY_GRENADE:
+    case WEAPON_FIRE_BOMB: flSpeed = 750.0f; flElasticity = 0.35f; break;
+    case WEAPON_DECOY_GRENADE: flElasticity = 0.5f; break;
+    default: break;
     }
 }
 
-std::vector<GrenadePathNode> CTrajectoryPhysics::Simulate(C_CSPlayerPawn* pLocal, C_CSWeaponBase* pWeapon, bool bAttack1, bool bAttack2)
+void CTrajectoryPhysics::Draw3DRing(const Vector3& origin, const Vector3& normal, float radius, ImColor color, float thickness)
 {
-    std::vector<GrenadePathNode> path;
-    if (!pLocal || !pWeapon) return path;
-
-    // 1. Definir Força do Arremesso (Lógica exata do CS)
-    float flThrowStrength = 0.0f;
-    if (bAttack1 && bAttack2) flThrowStrength = 0.5f; // Médio
-    else if (bAttack2) flThrowStrength = 0.3333f;     // Curto (Direito)
-    else if (bAttack1) flThrowStrength = 1.0f;        // Longo (Esquerdo)
-    else return path; // Não está arremessando
-
-    if (flThrowStrength == 0.0f) return path;
-
-    // 2. Setup Inicial
-    QAngle angEye = pLocal->m_angEyeAngles();
+    Vector3 up = (std::abs(normal.m_z) < 0.999f) ? Vector3(0, 0, 1) : Vector3(1, 0, 0);
     
-    // Ajuste de Pitch para arremessos diferentes
-    float flPitch = angEye.x;
+    // Cross product usando sua SDK
+    Vector3 right = normal; 
+    right = right.Cross(up); 
+    right.Normalize();
+
+    Vector3 forward = normal;
+    forward = forward.Cross(right);
+    forward.Normalize();
+
+    std::vector<ImVec2> points;
+    const int segments = 32;
+    const float step = (3.14159265f * 2.0f) / (float)segments;
+
+    for (int i = 0; i <= segments; ++i)
+    {
+        float theta = i * step;
+        
+        // pointWorld = origin + (right * cos) + (forward * sin)
+        Vector3 term1 = right; term1.Multiplyf(cosf(theta) * radius);
+        Vector3 term2 = forward; term2.Multiplyf(sinf(theta) * radius);
+        
+        Vector3 pointWorld = origin;
+        pointWorld.Add(term1);
+        pointWorld.Add(term2);
+
+        ImVec2 screenPos;
+        if (Math::WorldToScreen(pointWorld, screenPos)) points.push_back(screenPos);
+    }
+
+    auto* drawList = ImGui::GetBackgroundDrawList();
+    if (points.size() > 2)
+    {
+        for (size_t i = 1; i < points.size(); ++i)
+            drawList->AddLine(points[i - 1], points[i], color, thickness);
+    }
+}
+
+// =========================================================
+// SIMULAÇÃO
+// =========================================================
+
+std::vector<GrenadePathNode> CTrajectoryPhysics::Simulate(C_CSPlayerPawn* pLocal, bool bAttack1, bool bAttack2)
+{
+    if (!pLocal) return {};
+
+    int nWeaponID = GetCL_Weapons()->GetLocalWeaponDefinitionIndex();
+    QAngle currentAngles = pLocal->m_angEyeAngles();
+    Vector3 currentPos = pLocal->m_vOldOrigin();
+
+    bool isGrenade = (nWeaponID == WEAPON_FLASHBANG || nWeaponID == WEAPON_SMOKE_GRENADE || nWeaponID == WEAPON_MOLOTOV || 
+                      nWeaponID == WEAPON_INCENDIARY_GRENADE || nWeaponID == WEAPON_DECOY_GRENADE || nWeaponID == WEAPON_HIGH_EXPLOSIVE_GRENADE);
+
+    if (!isGrenade) return {};
+
+    // Cache check
+    if (!g_CachedPath.empty() && nWeaponID == g_LastWeaponID && bAttack1 == g_LastAttack1 && bAttack2 == g_LastAttack2 &&
+        DistSqrVec(currentPos, g_LastPos) < 1.0f && DistSqrAng(currentAngles, g_LastAngles) < 0.05f)
+    {
+        return g_CachedPath;
+    }
+
+    std::vector<GrenadePathNode> currentPath;
+    float flThrowStrength = (bAttack1 && bAttack2) ? 0.5f : (bAttack2 ? 0.3333f : (bAttack1 ? 1.0f : 0.0f));
+    if (flThrowStrength == 0.0f) return {};
+
+    float flPitch = currentAngles.m_x;
     if (flThrowStrength < 1.0f)
     {
-        // Se for arremesso fraco, o jogo subtrai pitch (faz a granada subir mais "curta")
-        float flSub = (90.0f - abs(flPitch)) * 0.1111f; // Aproximação CS2
-        if (flPitch < 0.0f) flPitch -= flSub;
-        else flPitch += flSub;
+        float flSub = (90.0f - std::abs(flPitch)) * 0.1111f;
+        flPitch = (flPitch < 0.0f) ? flPitch - flSub : flPitch + flSub;
     }
     
-    // Recalcular vetores com o Pitch ajustado
-    QAngle angThrow = angEye;
-    angThrow.x = flPitch;
+    QAngle angThrow = currentAngles;
+    angThrow.m_x = flPitch; 
     
     Vector3 vForward, vRight, vUp;
     Math::AngleVectors(angThrow, vForward, vRight, vUp);
 
-    // 3. Posição de Saída (Spawn da Granada)
-    // No CS2, sai ligeiramente da direita da cabeça (menos que no CS:GO)
-    Vector3 vStart = pLocal->m_vOldOrigin() + pLocal->m_vecViewOffset();
+    Vector3 vStart = currentPos;
+    // vStart += ViewOffset
+    vStart.Add(pLocal->m_vecViewOffset()); 
     
-    // Pequeno offset para não sair de dentro da cara (Valores empíricos CS2)
-    vStart += (vForward * 12.0f) + (vRight * -2.0f) + (vUp * -2.0f);
+    // Matemática manual para offset de spawn (12, -2, -2)
+    Vector3 fwd = vForward; fwd.Multiplyf(12.0f);
+    Vector3 rgt = vRight;   rgt.Multiplyf(-2.0f);
+    Vector3 upp = vUp;      upp.Multiplyf(-2.0f);
+    
+    vStart.Add(fwd); vStart.Add(rgt); vStart.Add(upp);
 
-    // 4. Parâmetros Físicos
-    float speed, gravity, elasticity, friction, drag;
-    SetupPhysics(pWeapon, speed, gravity, elasticity, friction, drag);
+    float speed, gravity, elasticity, friction;
+    SetupPhysics(nWeaponID, speed, gravity, elasticity, friction);
 
-    // Calcular Velocidade Inicial
-    // Velocidade base * Força
-    float flVel = speed * 0.9f; // Fator de correção CS2 (geralmente não sai com 100% da speed do script)
-    flVel *= flThrowStrength; 
+    // vVelocity = (vForward * (speed * 0.9f * flThrowStrength)) + (pLocal->m_vecVelocity() * 1.25f);
+    Vector3 vVelocity = vForward;
+    vVelocity.Multiplyf(speed * 0.9f * flThrowStrength);
+    
+    // Inércia (Agora vai funcionar pois adicionamos m_vecVelocity no CEntityData)
+    Vector3 vInertia = pLocal->m_vecVelocity(); 
+    vInertia.Multiplyf(1.25f);
+    vVelocity.Add(vInertia);
 
-    // O vetor de velocidade inicial
-    Vector3 vVelocity = vForward * flVel;
-
-    // *** CORREÇÃO CRUCIAL: INÉRCIA DO JOGADOR ***
-    // Se o jogador estiver correndo ou pulando, a granada herda velocidade.
-    Vector3 vPlayerVel = pLocal->m_vecAbsVelocity(); 
-    vVelocity += vPlayerVel * 1.25f; // 1.25 é o fator mágico da engine Source
-
-    // 5. Loop de Simulação
     Vector3 vPos = vStart;
-    path.push_back({ ImVec2(0,0), vPos, false }); // Ponto inicial
+    ImVec2 sStart;
+    if (Math::WorldToScreen(vPos, sStart)) currentPath.push_back({ sStart, vPos, Vector3(0,0,0), false }); 
 
-    // Configuração do Trace
-    CTraceFilter filter(0x1C1003, pLocal, 3, 15); // World + Props, Ignore Local
-    Ray_t ray;
-    CGameTrace tr;
-
-    // Simular por ~2.5 segundos (suficiente para a maioria das granadas)
-    int nTicks = TIME_TO_TICKS(3.0f); 
-    float flInterval = TICK_INTERVAL;
+    CTraceFilter filter(0x1C1003, pLocal, 3, 15); 
+    Ray_t ray; CGameTrace tr;
+    int nTicks = TIME_TO_TICKS(3.0f); float flInterval = TICK_INTERVAL;
 
     for (int i = 0; i < nTicks; ++i)
     {
-        // Integrar Gravidade (Euler simples ou Verlet)
-        // v = v0 + a * t
-        if (gravity != 0.0f)
-             vVelocity.z -= (gravity * 0.5f) * flInterval; // Metade da gravidade antes
+        if (gravity != 0.0f) vVelocity.m_z -= (gravity * 0.5f) * flInterval;
+        
+        Vector3 vMove = vVelocity;
+        vMove.Multiplyf(flInterval);
+        
+        Vector3 vNextPos = vPos;
+        vNextPos.Add(vMove);
 
-        // Arrasto (Air Resistance)
-        // vVelocity *= (1.0f - drag * flInterval); 
+        if (gravity != 0.0f) vVelocity.m_z -= (gravity * 0.5f) * flInterval;
 
-        Vector3 vNextPos = vPos + (vVelocity * flInterval);
-
-        // Integrar Gravidade (Segunda metade - Velocity Verlet simplificado)
-        if (gravity != 0.0f)
-             vVelocity.z -= (gravity * 0.5f) * flInterval;
-
-        // RAYCAST (TraceShape)
-        // Usando a função que você forneceu no CL_Trace
-        // Hull de granada ~ 2x2x2
         bool bHit = false;
-
-        // Limpar trace anterior
         memset(&tr, 0, sizeof(CGameTrace));
 
         if (IGamePhysicsQuery_TraceShape(SDK::Pointers::CVPhys2World(), ray, vPos, vNextPos, &filter, &tr))
@@ -166,60 +224,35 @@ std::vector<GrenadePathNode> CTrajectoryPhysics::Simulate(C_CSPlayerPawn* pLocal
             if (tr.DidHit())
             {
                 bHit = true;
-                
-                // Mover até o ponto de impacto
                 vPos = tr.vecPosition;
+                ImVec2 sHit;
+                if (Math::WorldToScreen(vPos, sHit)) currentPath.push_back({ sHit, vPos, tr.vecNormal, true });
 
-                // Verificar se parou/explodiu
-                // Molotov explode ao tocar chão (Normal.z > 0.7)
-                int nIdx = pWeapon->m_AttributeManager().m_Item().m_iItemDefinitionIndex();
-                if ((nIdx == 46 || nIdx == 48) && tr.vecNormal.z > 0.7f) // Molotov + Chão
-                {
-                    // Marca ponto final e encerra
-                    ImVec2 s;
-                    if (Math::WorldToScreen(vPos, s))
-                        path.push_back({ s, vPos, true });
-                    break;
-                }
+                if ((nWeaponID == WEAPON_MOLOTOV || nWeaponID == WEAPON_INCENDIARY_GRENADE) && tr.vecNormal.m_z > 0.7f) break;
 
-                // Resolver Colisão (Rebote)
                 Vector3 vNewVel;
                 PhysicsClipVelocity(vVelocity, tr.vecNormal, vNewVel, 1.0f + elasticity);
                 vVelocity = vNewVel;
 
-                // Aplicar Atrito de superfície
-                if (tr.vecNormal.z > 0.7f) // Se bateu no chão
-                {
-                    vVelocity *= (1.0f - friction);
-                }
-
-                // Se a velocidade for muito baixa, a granada para
-                if (vVelocity.LengthSqr() < (20.0f * 20.0f)) // Stop Speed
-                {
-                    break;
-                }
+                if (tr.vecNormal.m_z > 0.7f) vVelocity.Multiplyf(1.0f - friction);
+                if (vVelocity.LengthSquared() < 400.0f) break;
             }
-            else
-            {
-                vPos = vNextPos;
-            }
+            else vPos = vNextPos;
         }
-        else
-        {
-            vPos = vNextPos;
-        }
+        else vPos = vNextPos;
 
-        // Adicionar ponto para renderizar
-        // Para otimizar, não adicione TODOS os ticks, adicione a cada 2 ou 3
-        if (i % 2 == 0 || bHit)
+        if (!bHit && (i % 2 == 0))
         {
             ImVec2 s;
-            if (Math::WorldToScreen(vPos, s))
-            {
-                path.push_back({ s, vPos, bHit });
-            }
+            if (Math::WorldToScreen(vPos, s)) currentPath.push_back({ s, vPos, Vector3(0,0,0), false });
         }
     }
 
-    return path;
+    g_CachedPath = currentPath;
+    g_LastAngles = currentAngles;
+    g_LastPos = currentPos;
+    g_LastWeaponID = nWeaponID;
+    g_LastAttack1 = bAttack1;
+    g_LastAttack2 = bAttack2;
+    return currentPath;
 }

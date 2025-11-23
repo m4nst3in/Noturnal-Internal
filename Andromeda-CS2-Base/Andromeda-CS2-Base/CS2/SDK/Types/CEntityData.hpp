@@ -221,6 +221,7 @@ public:
 class C_BaseEntity : public CEntityInstance
 {
 public:
+SCHEMA_OFFSET( "C_BaseEntity" , "m_vecVelocity" , m_vecVelocity , Vector3 );
 	auto IsBasePlayerController() -> bool;
 	auto IsBasePlayerWeapon() -> bool;
 	auto IsObserverPawn() -> bool;

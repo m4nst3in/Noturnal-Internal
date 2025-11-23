@@ -195,29 +195,29 @@ auto RenderGrenadeESP( C_BaseEntity* pProj ) -> void
 
 auto RenderLocalGrenadePrediction() -> void
 {
-    if (!Settings::Visual::ShowGrenadePrediction) return;
+    if ( !Settings::Visual::ShowGrenadePrediction ) return;
 
     auto* lpPawn = GetCL_Players()->GetLocalPlayerPawn();
-    if (!lpPawn) return;
+    if ( !lpPawn ) return;
 
-    auto* pWeapon = GetCL_Weapons()->GetLocalWeapon(); // Sua função que retorna C_CSWeaponBase*
-    if (!pWeapon) return;
+    // Detectar Input (Para Internal puro com UserCmd, use cmd->buttons. 
+    // Para render hooks, GetAsyncKeyState é seguro o suficiente)
+    bool bLeft = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
+    bool bRight = (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0;
 
-    // Detectar Input (Isso depende de como você acessa o input no seu cheat)
-    // Se você estiver no Paint/Render Loop, você pode usar GetAsyncKeystate ou ler de uma classe de Input
-    // Exemplo genérico:
-    bool bLeft = (GetAsyncKeyState(VK_LBUTTON) & 0x8000);
-    bool bRight = (GetAsyncKeyState(VK_RBUTTON) & 0x8000);
+    // Se não estiver segurando nenhum clique, não calcula (limpa o desenho)
+    if (!bLeft && !bRight) return;
 
-    // Obter trajetória calculada
-    auto points = CTrajectoryPhysics::Simulate(lpPawn, pWeapon, bLeft, bRight);
+    // Simula (agora com Cache automático)
+    auto points = CTrajectoryPhysics::Simulate(lpPawn, bLeft, bRight);
 
     if (points.size() < 2) return;
 
-    // Desenhar
-    ImColor colLine = ImColor(255, 255, 255, 255);
-    ImColor colEnd = ImColor(255, 50, 50, 255);
+    // Cores
+    ImColor colLine = ImColor(255, 255, 255, 255); // Branco
+    ImColor colHit = ImColor(255, 50, 50, 255);    // Vermelho
 
+    // Desenhar Linhas da Trajetória
     for (size_t i = 1; i < points.size(); ++i)
     {
         GetRenderStackSystem()->DrawLine(
@@ -228,10 +228,24 @@ auto RenderLocalGrenadePrediction() -> void
         );
     }
 
-    // Desenhar marcador onde vai cair/parar
-    if (!points.empty())
+    // Desenhar Marcador Final (Anel 3D)
+    auto& lastPoint = points.back();
+    if (lastPoint.m_bDidHit)
     {
-        GetRenderStackSystem()->DrawCircle(points.back().m_ScreenPos, 5.0f, colEnd);
+        // Raio do anel de impacto
+        float radius = 15.0f; 
+        
+        // Desenha o anel que se molda à parede/chão
+        CTrajectoryPhysics::Draw3DRing(
+            lastPoint.m_WorldPos, 
+            lastPoint.m_Normal, 
+            radius, 
+            colHit, 
+            2.0f
+        );
+        
+        // Opcional: Círculo solido pequeno no centro
+        GetRenderStackSystem()->DrawCircle(lastPoint.m_ScreenPos, 3.0f, colHit);
     }
 }
 #ifdef max

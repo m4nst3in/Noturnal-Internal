@@ -47,6 +47,7 @@ public:
 	auto Dot( const QAngle& angles ) const -> float;
 
 	auto LengthSquared() const -> float;
+	inline auto LengthSqr() const -> float { return LengthSquared(); }
 	auto Length() const -> float;
 
 	auto DistanceSquared( const QAngle& angles ) const -> float;
