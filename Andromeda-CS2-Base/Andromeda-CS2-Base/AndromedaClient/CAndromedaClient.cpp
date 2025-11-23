@@ -10,6 +10,7 @@
 #include <AndromedaClient/Fonts/CFontManager.hpp>
 #include <AndromedaClient/Render/CRenderStackSystem.hpp>
 #include <AndromedaClient/Features/CVisual/CVisual.hpp>
+#include <AndromedaClient/Features/CRageBot/RageBot.hpp>
 
 #include <GameClient/CEntityCache/CEntityCache.hpp>
 
@@ -65,9 +66,9 @@ auto CAndromedaClient::OnClientOutput() -> void
 auto CAndromedaClient::OnCreateMove( CCSGOInput* pInput , CUserCmd* pUserCmd ) -> void
 {
     GetVisual()->OnCreateMove();
-
     
-
+    // Rage bot integration
+    GetRageBot()->OnCreateMove( pInput , pUserCmd );
 }
 
 auto GetAndromedaClient() -> CAndromedaClient*
