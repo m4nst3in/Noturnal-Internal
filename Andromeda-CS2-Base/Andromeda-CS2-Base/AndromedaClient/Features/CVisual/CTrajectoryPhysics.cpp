@@ -5,6 +5,7 @@
 #include <CS2/SDK/Update/GameTrace.hpp>
 #include <CS2/SDK/FunctionListSDK.hpp>
 #include <CS2/SDK/Math/Math.hpp>
+#include <CS2/SDK/Types/CEntityData.hpp>
 #include <GameClient/CL_Players.hpp>
 #include <GameClient/CL_Weapons.hpp>
 #include <GameClient/CL_ItemDefinition.hpp> 
@@ -68,7 +69,7 @@ int CTrajectoryPhysics::PhysicsClipVelocity(const Vector3& in, const Vector3& no
 }
 
 // CONFIGURAÇÃO EXATA (VALORES DO SCHEMA)
-void CTrajectoryPhysics::SetupPhysics(int nWeaponID, float& flSpeed, float& flGravity, float& flElasticity, float& flFriction)
+void CTrajectoryPhysics::SetupPhysics(C_CSWeaponBase* pWeapon, int nWeaponID, float& flSpeed, float& flGravity, float& flElasticity, float& flFriction)
 {
     // Padrão CS2
     flGravity = 800.0f; 
@@ -169,7 +170,7 @@ std::vector<GrenadePathNode> CTrajectoryPhysics::Simulate(C_CSPlayerPawn* pLocal
     vStart.Add(vViewOffset); 
     
     Vector3 offFwd = vForward; offFwd.Multiplyf(12.0f);
-    Vector3 offRight = vRight; offRight.Multiplyf(-2.0f); // Correção lateral
+    Vector3 offRight = vRight; offRight.Multiplyf(2.0f);
     Vector3 offUp = vUp;       offUp.Multiplyf(-2.0f);    // Correção vertical
     
     vStart.Add(offFwd); 
@@ -178,7 +179,7 @@ std::vector<GrenadePathNode> CTrajectoryPhysics::Simulate(C_CSPlayerPawn* pLocal
 
     // --- 3. FÍSICA E VELOCIDADE ---
     float baseSpeed, gravity, elasticity, friction;
-    SetupPhysics(nWeaponID, baseSpeed, gravity, elasticity, friction);
+    SetupPhysics(GetCL_Weapons()->GetLocalActiveWeapon(), nWeaponID, baseSpeed, gravity, elasticity, friction);
 
     // Fórmula: Speed * (Strength * 0.7 + 0.3)
     float flActualThrowSpeed = baseSpeed * ((flInputStrength * 0.7f) + 0.3f);
@@ -196,9 +197,9 @@ std::vector<GrenadePathNode> CTrajectoryPhysics::Simulate(C_CSPlayerPawn* pLocal
     std::vector<GrenadePathNode> currentPath;
     Vector3 vPos = vStart;
     
-    ImVec2 sStart;
-    if (Math::WorldToScreen(vPos, sStart)) 
-        currentPath.push_back({ sStart, vPos, Vector3(0,0,0), false }); 
+    //ImVec2 sStart;
+    //if (Math::WorldToScreen(vPos, sStart)) 
+    //    currentPath.push_back({ sStart, vPos, Vector3(0,0,0), false }); 
 
     // Máscara CS2 para projéteis (Ignora Player Clips)
     // Usar MASK_SOLID (0x200400B) é o mais seguro para granadas.
@@ -231,8 +232,7 @@ std::vector<GrenadePathNode> CTrajectoryPhysics::Simulate(C_CSPlayerPawn* pLocal
         // Mas na prática, para alinhar perfeitamente com internal:
         // Apenas uma multiplicação simples resolve para distâncias curtas.
         // No entanto, para precisão "perfeita":
-        Vector3 dragVec = vVelocity;
-        dragVec.Multiplyf(0.0f); // Reset
+        vVelocity.Multiplyf(drag_factor);
         // Se quiser testar arrasto real: vVelocity.Multiplyf(0.995f);
         // Vou deixar desativado ou muito baixo pois 1140 já compensa bem.
         // vVelocity.Multiplyf(0.998f); 

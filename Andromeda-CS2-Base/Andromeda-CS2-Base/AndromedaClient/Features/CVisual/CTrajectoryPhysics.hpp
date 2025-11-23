@@ -6,8 +6,9 @@
 #include <ImGui/imgui.h>
 #include <vector>
 
-// Forward Declaration
+// Forward Declarations (Essenciais para evitar o erro C2660/E0167)
 class C_CSPlayerPawn;
+class C_CSWeaponBase; 
 
 struct GrenadePathNode
 {
@@ -20,14 +21,14 @@ struct GrenadePathNode
 class CTrajectoryPhysics
 {
 public:
-    // Simulação Principal (STATIC)
+    // Simulação Principal
     static std::vector<GrenadePathNode> Simulate(
         C_CSPlayerPawn* pLocal, 
         bool bAttack1, 
         bool bAttack2
     );
 
-    // Desenho 3D (STATIC)
+    // Desenho 3D
     static void Draw3DRing(
         const Vector3& origin, 
         const Vector3& normal, 
@@ -37,9 +38,15 @@ public:
     );
 
 private:
-    // --- CORREÇÃO: Adicionado 'static' e removido 'flDrag' ---
-    static void SetupPhysics(int nWeaponID, float& flSpeed, float& flGravity, float& flElasticity, float& flFriction);    
+    // --- CORREÇÃO: Assinatura atualizada para receber o ponteiro da arma ---
+    static void SetupPhysics(
+        C_CSWeaponBase* pWeapon, 
+        int nWeaponID, 
+        float& flSpeed, 
+        float& flGravity, 
+        float& flElasticity, 
+        float& flFriction
+    );    
     
-    // (STATIC)
     static int PhysicsClipVelocity(const Vector3& in, const Vector3& normal, Vector3& out, float overbounce);
 };
