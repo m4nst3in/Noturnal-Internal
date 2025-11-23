@@ -136,8 +136,14 @@ auto CRageBot::SelectBestTarget( C_CSPlayerPawn* pLocalPawn ) -> TargetInfo
 			}
 			else
 			{
-				// Just use center point
-				auto bonePos = GetCL_Bones()->GetBonePositionByName( pPawn , "head_0" );
+				// Just use center point based on hitbox
+				const char* boneName = "head_0";
+				if ( hitbox == 5 ) // Chest
+					boneName = "spine_2";
+				else if ( hitbox == 2 ) // Pelvis
+					boneName = "pelvis";
+				
+				auto bonePos = GetCL_Bones()->GetBonePositionByName( pPawn , boneName );
 				if ( bonePos.Length() > 0 )
 					points.push_back( bonePos );
 			}
@@ -154,6 +160,7 @@ auto CRageBot::SelectBestTarget( C_CSPlayerPawn* pLocalPawn ) -> TargetInfo
 				
 				// Calculate hitchance
 				auto hitchance = CalculateHitchance( pLocalPawn , point , GetCL_Weapons()->GetLocalActiveWeapon() );
+				hitchance = AdaptiveHitchance( pPawn , hitchance );
 				
 				float requiredHitchance = GetRequiredHitchance( GetCL_Weapons()->GetLocalActiveWeapon() , visible );
 				if ( hitchance < requiredHitchance )
@@ -174,7 +181,7 @@ auto CRageBot::SelectBestTarget( C_CSPlayerPawn* pLocalPawn ) -> TargetInfo
 					bestTarget.fov = fov;
 					bestTarget.visible = visible;
 					bestTarget.hitchance = hitchance;
-					bestTarget.damage = minDamage;
+					bestTarget.damage = pPawn->m_iHealth(); // Store actual target health
 				}
 			}
 		}
@@ -328,13 +335,13 @@ auto CRageBot::CalculateHitchance( C_CSPlayerPawn* pLocalPawn , const Vector3& p
 	auto localEyePos = GetCL_Players()->GetLocalEyeOrigin();
 	auto distance = CalculateDistance( localEyePos , point );
 	
-	// Base hitchance from weapon config
-	float baseHitchance = GetRequiredHitchance( pWeapon , true );
+	// Start with base hitchance of 100%
+	float baseHitchance = 100.0f;
 	
 	// Reduce hitchance based on distance
 	float distanceFactor = 1.0f - ( distance / Settings::RageBot::MaxDistance );
 	
-	return baseHitchance * distanceFactor;
+	return baseHitchance * std::max( 0.0f , distanceFactor );
 }
 
 auto CRageBot::AdaptiveHitchance( C_CSPlayerPawn* pTarget , float baseHitchance ) -> float
@@ -380,10 +387,11 @@ auto CRageBot::GetMinDamage( C_CSWeaponBaseGun* pWeapon , bool visible ) -> int
 auto CRageBot::CanHitMinDamage( C_CSPlayerPawn* pLocalPawn , C_CSPlayerPawn* pTarget , const Vector3& point , int minDamage ) -> bool
 {
 	// Simplified damage check
-	// Real implementation would trace and calculate actual damage
+	// Real implementation would trace and calculate actual damage with penetration
 	
-	// For now, just check if target health is above min damage
-	return pTarget->m_iHealth() >= minDamage;
+	// For now, assume we can always hit at least minDamage if target is valid
+	// This would need proper damage calculation based on weapon, distance, and penetration
+	return true;
 }
 
 auto CRageBot::GetWeaponGroup( C_CSWeaponBaseGun* pWeapon ) -> WeaponGroup

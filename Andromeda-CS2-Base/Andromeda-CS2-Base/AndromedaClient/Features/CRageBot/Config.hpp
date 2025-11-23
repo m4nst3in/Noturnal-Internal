@@ -25,10 +25,10 @@ enum class TargetPriority
 
 enum class AutoStopMode
 {
-	FULL = 0,        // Para completamente
-	MIN_SPEED = 1,   // Para até velocidade mínima para accuracy
-	PREDICTIVE = 2,  // Prediz quando vai parar
-	QUICK = 3        // Contra-strafing rápido
+	FULL = 0,        // Stop completely
+	MIN_SPEED = 1,   // Stop to minimum speed for accuracy
+	PREDICTIVE = 2,  // Predict when target will stop
+	QUICK = 3        // Quick counter-strafing
 };
 
 struct WeaponConfig
