@@ -189,6 +189,7 @@ public:
 	SCHEMA_OFFSET( "CCSWeaponBaseVData" , "m_flPenetration" , m_flPenetration , float32 );
 	SCHEMA_OFFSET( "CCSWeaponBaseVData" , "m_flRange" , m_flRange , float32 );
 	SCHEMA_OFFSET( "CCSWeaponBaseVData" , "m_flRangeModifier" , m_flRangeModifier , float32 );
+	SCHEMA_OFFSET( "CCSWeaponBaseVData" , "m_flThrowVelocity" , m_flThrowVelocity , float32 );
 };
 
 class C_EconItemView : public IEconItemInterface
@@ -251,6 +252,9 @@ public:
 	SCHEMA_OFFSET( "C_BaseEntity" , "m_MoveType" , m_MoveType , MoveType_t );
 	SCHEMA_OFFSET( "C_BaseEntity" , "m_hOwnerEntity" , m_hOwnerEntity , CHandle );
 	SCHEMA_OFFSET( "C_BaseEntity" , "m_nSubclassID" , m_nSubclassID , CUtlStringToken );
+	SCHEMA_OFFSET( "C_BaseEntity" , "m_pSubclassVData", m_pSubclassVData, void* );
+	SCHEMA_OFFSET( "C_BaseEntity" , "m_flFriction" , m_flFriction , float32 );
+    SCHEMA_OFFSET( "C_BaseEntity" , "m_flElasticity" , m_flElasticity , float32 );
 };
 
 class CGlowProperty
@@ -444,7 +448,7 @@ public:
 	SCHEMA_OFFSET( "C_CSPlayerPawnBase" , "m_flFlashDuration" , m_flFlashDuration , float32 );
 	SCHEMA_OFFSET( "C_CSPlayerPawnBase" , "m_flLastSpawnTimeIndex" , m_flLastSpawnTimeIndex , GameTime_t );
 	SCHEMA_OFFSET( "C_CSPlayerPawnBase" , "m_bGunGameImmunity" , m_bGunGameImmunity , bool );
-	SCHEMA_OFFSET( "C_CSPlayerPawnBase" , "m_angEyeAngles" , m_angEyeAngles , QAngle );
+	//SCHEMA_OFFSET( "C_CSPlayerPawnBase" , "m_angEyeAngles" , m_angEyeAngles , QAngle );
 };
 
 class C_CSObserverPawn : public C_CSPlayerPawnBase
@@ -465,6 +469,7 @@ public:
 	SCHEMA_OFFSET( "C_CSPlayerPawn" , "m_entitySpottedState" , m_entitySpottedState , EntitySpottedState_t );
 	SCHEMA_OFFSET( "C_CSPlayerPawn" , "m_EconGloves" , m_EconGloves , C_EconItemView );
 	SCHEMA_OFFSET( "C_CSPlayerPawn" , "m_hHudModelArms" , m_hHudModelArms , CHandle ); // C_CS2HudModelArms
+	SCHEMA_OFFSET( "C_CSPlayerPawn" , "m_angEyeAngles" , m_angEyeAngles , QAngle );
 
 public:
 	auto GetViewModels() -> std::vector<C_CS2HudModelWeapon*>;
@@ -540,7 +545,13 @@ public:
 	auto UpdateCompositeMaterial( CCompositeMaterialOwner* pCCompositeMaterialOwner ) -> void;
 	auto UpdateSubclass() -> void;
 	auto UpdateSkin() -> void;
-};
+	auto GetVData() -> CCSWeaponBaseVData*
+    {
+        // Pega o ponteiro bruto da BaseEntity e converte para nossa classe VData
+        auto pVData = this->m_pSubclassVData();
+        if (!pVData) return nullptr;
+        return reinterpret_cast<CCSWeaponBaseVData*>(pVData);
+    }};
 
 class C_CSWeaponBaseGun : public C_CSWeaponBase
 {

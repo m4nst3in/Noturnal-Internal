@@ -2,7 +2,7 @@
 
 #include <CS2/SDK/Math/Vector3.hpp>
 #include <CS2/SDK/Math/QAngle.hpp>
-#include <CS2/SDK/Math/Math.hpp> // Para ImVec2 e WorldToScreen
+#include <CS2/SDK/Math/Math.hpp> 
 #include <ImGui/imgui.h>
 #include <vector>
 
@@ -13,21 +13,21 @@ struct GrenadePathNode
 {
     ImVec2 m_ScreenPos;
     Vector3 m_WorldPos;
-    Vector3 m_Normal;   // Normal da superfície atingida (para desenhar o anel 3D)
-    bool m_bDidHit;     // Se este ponto é um impacto
+    Vector3 m_Normal;   
+    bool m_bDidHit;     
 };
 
 class CTrajectoryPhysics
 {
 public:
-    // Retorna a lista de pontos para desenhar (com Cache e Física Avançada)
+    // Simulação Principal (STATIC)
     static std::vector<GrenadePathNode> Simulate(
         C_CSPlayerPawn* pLocal, 
         bool bAttack1, 
         bool bAttack2
     );
 
-    // Desenha um anel 3D alinhado à normal da superfície
+    // Desenho 3D (STATIC)
     static void Draw3DRing(
         const Vector3& origin, 
         const Vector3& normal, 
@@ -37,6 +37,9 @@ public:
     );
 
 private:
-    static void SetupPhysics(int nWeaponID, float& flSpeed, float& flGravity, float& flElasticity, float& flFriction);
+    // --- CORREÇÃO: Adicionado 'static' e removido 'flDrag' ---
+    static void SetupPhysics(int nWeaponID, float& flSpeed, float& flGravity, float& flElasticity, float& flFriction);    
+    
+    // (STATIC)
     static int PhysicsClipVelocity(const Vector3& in, const Vector3& normal, Vector3& out, float overbounce);
 };
