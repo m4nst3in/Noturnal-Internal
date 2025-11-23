@@ -84,7 +84,7 @@ void CTrajectoryPhysics::SetupPhysics(int nWeaponID, float& flSpeed, float& flGr
     case WEAPON_MOLOTOV:
     case WEAPON_INCENDIARY_GRENADE:
     case WEAPON_FIRE_BOMB: 
-        flSpeed = 750.0f; 
+        // Speed is already 750.0f (same as default)
         flElasticity = 0.35f; 
         break;
     case WEAPON_DECOY_GRENADE: 
