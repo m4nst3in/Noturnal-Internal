@@ -26,6 +26,12 @@
 #define TICK_INTERVAL 0.015625f 
 #define TIME_TO_TICKS( dt ) ( (int)( 0.5f + (float)(dt) / TICK_INTERVAL ) )
 
+// CS2 Grenade Physics Constants
+constexpr float CS2_GRENADE_THROW_SPEED = 750.0f;      // Base throw speed
+constexpr float CS2_GRENADE_GRAVITY = 800.0f;          // Gravity value for CS2
+constexpr float CS2_GRENADE_ELASTICITY = 0.45f;        // Default bounce coefficient
+constexpr float CS2_GRENADE_FRICTION = 0.2f;           // Velocity loss on ground contact
+
 // --- MATEMÁTICA MANUAL ---
 void Manual_AngleVectors(const QAngle& angles, Vector3& forward)
 {
@@ -66,10 +72,10 @@ int CTrajectoryPhysics::PhysicsClipVelocity(const Vector3& in, const Vector3& no
 void CTrajectoryPhysics::SetupPhysics(int nWeaponID, float& flSpeed, float& flGravity, float& flElasticity, float& flFriction)
 {
     // CS2 correct physics constants
-    flSpeed = 750.0f; 
-    flGravity = 800.0f; 
-    flElasticity = 0.45f; 
-    flFriction = 0.2f;
+    flSpeed = CS2_GRENADE_THROW_SPEED; 
+    flGravity = CS2_GRENADE_GRAVITY; 
+    flElasticity = CS2_GRENADE_ELASTICITY; 
+    flFriction = CS2_GRENADE_FRICTION;
     
     switch (nWeaponID) {
     case WEAPON_SMOKE_GRENADE: 
