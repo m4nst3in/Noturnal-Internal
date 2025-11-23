@@ -65,14 +65,27 @@ int CTrajectoryPhysics::PhysicsClipVelocity(const Vector3& in, const Vector3& no
 
 void CTrajectoryPhysics::SetupPhysics(int nWeaponID, float& flSpeed, float& flGravity, float& flElasticity, float& flFriction)
 {
-    flSpeed = 1000.0f; flGravity = 800.0f; flElasticity = 0.45f; flFriction = 0.2f;      
+    // CS2 correct physics constants
+    flSpeed = 750.0f; 
+    flGravity = 800.0f; 
+    flElasticity = 0.45f; 
+    flFriction = 0.2f;
+    
     switch (nWeaponID) {
-    case WEAPON_SMOKE_GRENADE: flElasticity = 0.3f; break;
+    case WEAPON_SMOKE_GRENADE: 
+        flElasticity = 0.3f; 
+        break;
     case WEAPON_MOLOTOV:
     case WEAPON_INCENDIARY_GRENADE:
-    case WEAPON_FIRE_BOMB: flSpeed = 750.0f; flElasticity = 0.35f; break;
-    case WEAPON_DECOY_GRENADE: flElasticity = 0.5f; break;
-    default: break;
+    case WEAPON_FIRE_BOMB: 
+        flSpeed = 750.0f; 
+        flElasticity = 0.35f; 
+        break;
+    case WEAPON_DECOY_GRENADE: 
+        flElasticity = 0.5f; 
+        break;
+    default: 
+        break;
     }
 }
 
@@ -119,7 +132,20 @@ std::vector<GrenadePathNode> CTrajectoryPhysics::Simulate(C_CSPlayerPawn* pLocal
     if (!isGrenade) return {};
 
     std::vector<GrenadePathNode> currentPath;
-    float flThrowStrength = (bAttack1 && bAttack2) ? 0.5f : (bAttack2 ? 0.3333f : (bAttack1 ? 1.0f : 0.0f));
+    
+    // Calculate throw strength correctly
+    // Full throw (left click only): 1.0f
+    // Underhand throw (right click only): 0.5f  
+    // Medium throw (both clicks): 0.5f
+    float flThrowStrength = 1.0f;  // Default: full throw
+    if (bAttack2 && !bAttack1) {
+        flThrowStrength = 0.5f;  // Underhand throw
+    } else if (bAttack1 && bAttack2) {
+        flThrowStrength = 0.5f;  // Medium throw
+    } else if (!bAttack1 && !bAttack2) {
+        return {};  // No throw
+    }
+    
     if (flThrowStrength <= 0.0f) return {};
 
     float flPitch = currentAngles.m_x;
@@ -151,8 +177,9 @@ std::vector<GrenadePathNode> CTrajectoryPhysics::Simulate(C_CSPlayerPawn* pLocal
     float speed, gravity, elasticity, friction;
     SetupPhysics(nWeaponID, speed, gravity, elasticity, friction);
 
+    // Calculate initial velocity correctly (no 0.9f multiplier)
     Vector3 vVelocity = vForward;
-    vVelocity.Multiplyf(speed * 0.9f * flThrowStrength);
+    vVelocity.Multiplyf(speed * flThrowStrength);
     
     // --- LOG DE DEBUG ---
     // Imprime apenas a cada 60 chamadas (aprox. 1 vez por segundo)
@@ -180,12 +207,16 @@ std::vector<GrenadePathNode> CTrajectoryPhysics::Simulate(C_CSPlayerPawn* pLocal
 
     for (int i = 0; i < nTicks; ++i)
     {
-        if (gravity != 0.0f) vVelocity.m_z -= (gravity * 0.5f) * flInterval;
+        // Apply gravity ONCE per tick (before calculating movement)
+        if (gravity != 0.0f) {
+            vVelocity.m_z -= gravity * flInterval;
+        }
         
-        Vector3 vMove = vVelocity; vMove.Multiplyf(flInterval);
-        Vector3 vNextPos = vPos; vNextPos.Add(vMove);
-
-        if (gravity != 0.0f) vVelocity.m_z -= (gravity * 0.5f) * flInterval;
+        // Calculate next position
+        Vector3 vMove = vVelocity; 
+        vMove.Multiplyf(flInterval);
+        Vector3 vNextPos = vPos; 
+        vNextPos.Add(vMove);
 
         bool bHit = false;
         memset(&tr, 0, sizeof(CGameTrace));
@@ -199,14 +230,25 @@ std::vector<GrenadePathNode> CTrajectoryPhysics::Simulate(C_CSPlayerPawn* pLocal
                 ImVec2 sHit;
                 if (Math::WorldToScreen(vPos, sHit)) currentPath.push_back({ sHit, vPos, tr.vecNormal, true });
 
+                // Molotov/Incendiary breaks on ground hit
                 if ((nWeaponID == WEAPON_MOLOTOV || nWeaponID == WEAPON_INCENDIARY_GRENADE) && tr.vecNormal.m_z > 0.7f) break;
 
+                // Calculate reflection using PhysicsClipVelocity
                 Vector3 vNewVel;
-                PhysicsClipVelocity(vVelocity, tr.vecNormal, vNewVel, 1.0f + elasticity);
+                PhysicsClipVelocity(vVelocity, tr.vecNormal, vNewVel, 2.0f);
                 vVelocity = vNewVel;
-
-                if (tr.vecNormal.m_z > 0.7f) vVelocity.Multiplyf(1.0f - friction);
-                if (vVelocity.LengthSquared() < 400.0f) break;
+                
+                // Apply elasticity (bounce coefficient)
+                vVelocity.Multiplyf(elasticity);
+                
+                // Apply friction on horizontal surfaces
+                if (tr.vecNormal.m_z > 0.7f) {
+                    vVelocity.Multiplyf(1.0f - friction);
+                }
+                
+                // Stop if velocity is too low
+                float speed = vVelocity.Length();
+                if (speed < 0.1f) break;
             }
             else vPos = vNextPos;
         }
