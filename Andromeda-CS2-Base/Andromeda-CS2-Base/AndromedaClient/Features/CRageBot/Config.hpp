@@ -3,6 +3,15 @@
 #include <Common/Common.hpp>
 #include <map>
 
+// Weapon definition indices for classification
+namespace WeaponID
+{
+	constexpr int DEAGLE = 1;
+	constexpr int REVOLVER = 64;
+	constexpr int G3SG1 = 11;
+	constexpr int SCAR20 = 38;
+}
+
 enum class WeaponGroup
 {
 	PISTOL = 0,

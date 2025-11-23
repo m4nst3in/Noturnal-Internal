@@ -317,7 +317,7 @@ auto CRageBot::GetSafePoints( C_CSPlayerPawn* pTarget , int hitbox , std::vector
 
 auto CRageBot::ShouldUseSafePoint( C_CSPlayerPawn* pTarget ) -> bool
 {
-	if ( !Settings::RageBot::SafePoints )
+	if ( !Settings::RageBot::SafePoints || !pTarget )
 		return false;
 	
 	// Use safe points when target is moving slowly or crouching
@@ -338,14 +338,18 @@ auto CRageBot::CalculateHitchance( C_CSPlayerPawn* pLocalPawn , const Vector3& p
 	// Start with base hitchance of 100%
 	float baseHitchance = 100.0f;
 	
-	// Reduce hitchance based on distance
-	float distanceFactor = 1.0f - ( distance / Settings::RageBot::MaxDistance );
+	// Reduce hitchance based on distance (avoid division by zero)
+	float maxDistance = std::max( 1.0f , Settings::RageBot::MaxDistance );
+	float distanceFactor = 1.0f - ( distance / maxDistance );
 	
 	return baseHitchance * std::max( 0.0f , distanceFactor );
 }
 
 auto CRageBot::AdaptiveHitchance( C_CSPlayerPawn* pTarget , float baseHitchance ) -> float
 {
+	if ( !pTarget )
+		return baseHitchance;
+	
 	// Adjust hitchance based on target velocity
 	auto velocity = pTarget->m_vecVelocity();
 	float speed = velocity.Length();
@@ -407,7 +411,7 @@ auto CRageBot::GetWeaponGroup( C_CSWeaponBaseGun* pWeapon ) -> WeaponGroup
 		{
 			auto defIndex = GetCL_Weapons()->GetLocalWeaponDefinitionIndex();
 			// Desert Eagle, R8 Revolver are heavy pistols
-			if ( defIndex == 1 || defIndex == 64 )
+			if ( defIndex == WeaponID::DEAGLE || defIndex == WeaponID::REVOLVER )
 				return WeaponGroup::HEAVY_PISTOL;
 			return WeaponGroup::PISTOL;
 		}
@@ -419,7 +423,7 @@ auto CRageBot::GetWeaponGroup( C_CSWeaponBaseGun* pWeapon ) -> WeaponGroup
 		{
 			auto defIndex = GetCL_Weapons()->GetLocalWeaponDefinitionIndex();
 			// G3SG1, SCAR-20 are auto-snipers
-			if ( defIndex == 11 || defIndex == 38 )
+			if ( defIndex == WeaponID::G3SG1 || defIndex == WeaponID::SCAR20 )
 				return WeaponGroup::AUTO_SNIPER;
 			return WeaponGroup::SNIPER;
 		}
