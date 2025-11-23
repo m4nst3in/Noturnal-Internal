@@ -11,66 +11,53 @@
 #include <GameClient/CL_Weapons.hpp>
 #include <GameClient/CL_ItemDefinition.hpp> 
 
+// INCLUDE DO LOGGER (Verifique se o caminho está certo)
+#include <Common/DevLog.hpp> 
+
 #include <cmath>
 #include <algorithm> 
 
-// =========================================================
-// CONFIGURAÇÕES
-// =========================================================
-#define TICK_INTERVAL           0.015625f 
-#define TIME_TO_TICKS( dt )     ( (int)( 0.5f + (float)(dt) / TICK_INTERVAL ) )
+// --- CONSTANTES ---
+#ifndef M_PI
+#define M_PI 3.14159265358979323846f
+#endif
 
-// Cache Global
-static std::vector<GrenadePathNode> g_CachedPath;
-static QAngle g_LastAngles = { 0.f, 0.f, 0.f };
-static Vector3 g_LastPos = { 0.f, 0.f, 0.f };
-static int g_LastWeaponID = -1;
-static bool g_LastAttack1 = false;
-static bool g_LastAttack2 = false;
+#define DEG2RAD(x) ((float)(x) * (float)(M_PI / 180.f))
+#define TICK_INTERVAL 0.015625f 
+#define TIME_TO_TICKS( dt ) ( (int)( 0.5f + (float)(dt) / TICK_INTERVAL ) )
 
-// =========================================================
-// HELPERS LOCAIS
-// =========================================================
+// --- MATEMÁTICA MANUAL ---
+void Manual_AngleVectors(const QAngle& angles, Vector3& forward)
+{
+    float sp, sy, cp, cy;
+    float pitch = DEG2RAD(angles.m_x);
+    float yaw   = DEG2RAD(angles.m_y);
 
-// Calcula distância ao quadrado entre dois Vectors (Usando sua SDK)
-float DistSqrVec(const Vector3& a, const Vector3& b) {
-    Vector3 delta = a;
-    delta.Subtract(b);
-    return delta.LengthSquared();
+    sp = sinf(pitch);
+    cp = cosf(pitch);
+    sy = sinf(yaw);
+    cy = cosf(yaw);
+
+    forward.m_x = cp * cy;
+    forward.m_y = cp * sy;
+    forward.m_z = -sp;
 }
-
-// Calcula distância ao quadrado entre dois QAngles (Usando sua SDK)
-float DistSqrAng(const QAngle& a, const QAngle& b) {
-    QAngle delta = a;
-    delta.Subtract(b);
-    return delta.LengthSquared();
-}
-
-// =========================================================
-// FÍSICA E HELPERS
-// =========================================================
 
 int CTrajectoryPhysics::PhysicsClipVelocity(const Vector3& in, const Vector3& normal, Vector3& out, float overbounce)
 {
     float backoff = in.Dot(normal) * overbounce;
-
-    // SDK: out = in - (normal * backoff)
     Vector3 change = normal; 
     change.Multiplyf(backoff);
-    
     out = in;
     out.Subtract(change);
 
-    // Correção de precisão
     if (out.m_x > -0.1f && out.m_x < 0.1f) out.m_x = 0.0f;
     if (out.m_y > -0.1f && out.m_y < 0.1f) out.m_y = 0.0f;
     if (out.m_z > -0.1f && out.m_z < 0.1f) out.m_z = 0.0f;
 
     float adjust = out.Dot(normal);
-    if (adjust < 0.0f)
-    {
-        Vector3 adj = normal;
-        adj.Multiplyf(adjust);
+    if (adjust < 0.0f) {
+        Vector3 adj = normal; adj.Multiplyf(adjust);
         out.Subtract(adj);
     }
     return 0;
@@ -79,9 +66,7 @@ int CTrajectoryPhysics::PhysicsClipVelocity(const Vector3& in, const Vector3& no
 void CTrajectoryPhysics::SetupPhysics(int nWeaponID, float& flSpeed, float& flGravity, float& flElasticity, float& flFriction)
 {
     flSpeed = 1000.0f; flGravity = 800.0f; flElasticity = 0.45f; flFriction = 0.2f;      
-
-    switch (nWeaponID)
-    {
+    switch (nWeaponID) {
     case WEAPON_SMOKE_GRENADE: flElasticity = 0.3f; break;
     case WEAPON_MOLOTOV:
     case WEAPON_INCENDIARY_GRENADE:
@@ -94,75 +79,51 @@ void CTrajectoryPhysics::SetupPhysics(int nWeaponID, float& flSpeed, float& flGr
 void CTrajectoryPhysics::Draw3DRing(const Vector3& origin, const Vector3& normal, float radius, ImColor color, float thickness)
 {
     Vector3 up = (std::abs(normal.m_z) < 0.999f) ? Vector3(0, 0, 1) : Vector3(1, 0, 0);
-    
-    // Cross product usando sua SDK
-    Vector3 right = normal; 
-    right = right.Cross(up); 
-    right.Normalize();
-
-    Vector3 forward = normal;
-    forward = forward.Cross(right);
-    forward.Normalize();
+    Vector3 right = normal; right = right.Cross(up); right.Normalize();
+    Vector3 forward = normal; forward = forward.Cross(right); forward.Normalize();
 
     std::vector<ImVec2> points;
     const int segments = 32;
-    const float step = (3.14159265f * 2.0f) / (float)segments;
+    const float step = (float(M_PI) * 2.0f) / (float)segments;
 
-    for (int i = 0; i <= segments; ++i)
-    {
+    for (int i = 0; i <= segments; ++i) {
         float theta = i * step;
-        
-        // pointWorld = origin + (right * cos) + (forward * sin)
         Vector3 term1 = right; term1.Multiplyf(cosf(theta) * radius);
         Vector3 term2 = forward; term2.Multiplyf(sinf(theta) * radius);
-        
-        Vector3 pointWorld = origin;
-        pointWorld.Add(term1);
-        pointWorld.Add(term2);
-
+        Vector3 pointWorld = origin; pointWorld.Add(term1); pointWorld.Add(term2);
         ImVec2 screenPos;
         if (Math::WorldToScreen(pointWorld, screenPos)) points.push_back(screenPos);
     }
-
     auto* drawList = ImGui::GetBackgroundDrawList();
-    if (points.size() > 2)
-    {
+    if (points.size() > 2) {
         for (size_t i = 1; i < points.size(); ++i)
             drawList->AddLine(points[i - 1], points[i], color, thickness);
     }
 }
 
-// =========================================================
-// SIMULAÇÃO
-// =========================================================
+// TIMER DE DEBUG
+static int g_DebugTimer = 0;
 
 std::vector<GrenadePathNode> CTrajectoryPhysics::Simulate(C_CSPlayerPawn* pLocal, bool bAttack1, bool bAttack2)
 {
     if (!pLocal) return {};
 
     int nWeaponID = GetCL_Weapons()->GetLocalWeaponDefinitionIndex();
+    
+    Vector3 currentPos = pLocal->GetOrigin();
     QAngle currentAngles = pLocal->m_angEyeAngles();
-    Vector3 currentPos = pLocal->m_vOldOrigin();
 
     bool isGrenade = (nWeaponID == WEAPON_FLASHBANG || nWeaponID == WEAPON_SMOKE_GRENADE || nWeaponID == WEAPON_MOLOTOV || 
                       nWeaponID == WEAPON_INCENDIARY_GRENADE || nWeaponID == WEAPON_DECOY_GRENADE || nWeaponID == WEAPON_HIGH_EXPLOSIVE_GRENADE);
 
     if (!isGrenade) return {};
 
-    // Cache check
-    if (!g_CachedPath.empty() && nWeaponID == g_LastWeaponID && bAttack1 == g_LastAttack1 && bAttack2 == g_LastAttack2 &&
-        DistSqrVec(currentPos, g_LastPos) < 1.0f && DistSqrAng(currentAngles, g_LastAngles) < 0.05f)
-    {
-        return g_CachedPath;
-    }
-
     std::vector<GrenadePathNode> currentPath;
     float flThrowStrength = (bAttack1 && bAttack2) ? 0.5f : (bAttack2 ? 0.3333f : (bAttack1 ? 1.0f : 0.0f));
-    if (flThrowStrength == 0.0f) return {};
+    if (flThrowStrength <= 0.0f) return {};
 
     float flPitch = currentAngles.m_x;
-    if (flThrowStrength < 1.0f)
-    {
+    if (flThrowStrength < 1.0f) {
         float flSub = (90.0f - std::abs(flPitch)) * 0.1111f;
         flPitch = (flPitch < 0.0f) ? flPitch - flSub : flPitch + flSub;
     }
@@ -170,31 +131,44 @@ std::vector<GrenadePathNode> CTrajectoryPhysics::Simulate(C_CSPlayerPawn* pLocal
     QAngle angThrow = currentAngles;
     angThrow.m_x = flPitch; 
     
-    Vector3 vForward, vRight, vUp;
-    Math::AngleVectors(angThrow, vForward, vRight, vUp);
+    Vector3 vForward;
+    Manual_AngleVectors(angThrow, vForward);
+
+    // Leitura de ViewOffset
+    Vector3 vViewOffset = pLocal->m_vecViewOffset();
+    
+    // Se o ViewOffset estiver zerado (bug de leitura), usa o padrão (0,0,64)
+    if (vViewOffset.LengthSquared() < 1.0f) { 
+        vViewOffset = Vector3(0.0f, 0.0f, 64.0f); 
+    }
 
     Vector3 vStart = currentPos;
-    // vStart += ViewOffset
-    vStart.Add(pLocal->m_vecViewOffset()); 
+    vStart.Add(vViewOffset); 
     
-    // Matemática manual para offset de spawn (12, -2, -2)
-    Vector3 fwd = vForward; fwd.Multiplyf(12.0f);
-    Vector3 rgt = vRight;   rgt.Multiplyf(-2.0f);
-    Vector3 upp = vUp;      upp.Multiplyf(-2.0f);
-    
-    vStart.Add(fwd); vStart.Add(rgt); vStart.Add(upp);
+    Vector3 offset = vForward; offset.Multiplyf(10.0f); 
+    vStart.Add(offset);
 
     float speed, gravity, elasticity, friction;
     SetupPhysics(nWeaponID, speed, gravity, elasticity, friction);
 
-    // vVelocity = (vForward * (speed * 0.9f * flThrowStrength)) + (pLocal->m_vecVelocity() * 1.25f);
     Vector3 vVelocity = vForward;
     vVelocity.Multiplyf(speed * 0.9f * flThrowStrength);
     
-    // Inércia (Agora vai funcionar pois adicionamos m_vecVelocity no CEntityData)
-    Vector3 vInertia = pLocal->m_vecVelocity(); 
-    vInertia.Multiplyf(1.25f);
-    vVelocity.Add(vInertia);
+    // --- LOG DE DEBUG ---
+    // Imprime apenas a cada 60 chamadas (aprox. 1 vez por segundo)
+    if (g_DebugTimer++ > 60) 
+    {
+        g_DebugTimer = 0;
+        
+        DEV_LOG("=== GRENADE DEBUG ===\n");
+        DEV_LOG("Angles: Pitch=%.2f, Yaw=%.2f\n", currentAngles.m_x, currentAngles.m_y);
+        DEV_LOG("Forward Vec: %.2f, %.2f, %.2f\n", vForward.m_x, vForward.m_y, vForward.m_z);
+        DEV_LOG("Origin: %.2f, %.2f, %.2f\n", currentPos.m_x, currentPos.m_y, currentPos.m_z);
+        DEV_LOG("ViewOffset: %.2f, %.2f, %.2f\n", vViewOffset.m_x, vViewOffset.m_y, vViewOffset.m_z);
+        DEV_LOG("Start Pos: %.2f, %.2f, %.2f\n", vStart.m_x, vStart.m_y, vStart.m_z);
+        DEV_LOG("Velocity: %.2f, %.2f, %.2f\n", vVelocity.m_x, vVelocity.m_y, vVelocity.m_z);
+        DEV_LOG("=====================\n");
+    }
 
     Vector3 vPos = vStart;
     ImVec2 sStart;
@@ -208,11 +182,8 @@ std::vector<GrenadePathNode> CTrajectoryPhysics::Simulate(C_CSPlayerPawn* pLocal
     {
         if (gravity != 0.0f) vVelocity.m_z -= (gravity * 0.5f) * flInterval;
         
-        Vector3 vMove = vVelocity;
-        vMove.Multiplyf(flInterval);
-        
-        Vector3 vNextPos = vPos;
-        vNextPos.Add(vMove);
+        Vector3 vMove = vVelocity; vMove.Multiplyf(flInterval);
+        Vector3 vNextPos = vPos; vNextPos.Add(vMove);
 
         if (gravity != 0.0f) vVelocity.m_z -= (gravity * 0.5f) * flInterval;
 
@@ -241,18 +212,10 @@ std::vector<GrenadePathNode> CTrajectoryPhysics::Simulate(C_CSPlayerPawn* pLocal
         }
         else vPos = vNextPos;
 
-        if (!bHit && (i % 2 == 0))
-        {
+        if (!bHit && (i % 2 == 0)) {
             ImVec2 s;
             if (Math::WorldToScreen(vPos, s)) currentPath.push_back({ s, vPos, Vector3(0,0,0), false });
         }
     }
-
-    g_CachedPath = currentPath;
-    g_LastAngles = currentAngles;
-    g_LastPos = currentPos;
-    g_LastWeaponID = nWeaponID;
-    g_LastAttack1 = bAttack1;
-    g_LastAttack2 = bAttack2;
     return currentPath;
 }
