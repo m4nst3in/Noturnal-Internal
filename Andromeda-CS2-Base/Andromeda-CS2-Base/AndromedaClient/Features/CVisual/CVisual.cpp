@@ -16,6 +16,7 @@
 #include <deque>
 #include <CS2/SDK/Update/GameTrace.hpp>
 #include <CS2/SDK/FunctionListSDK.hpp>
+#include <AndromedaClient/Features/CVisual/CCameraView.hpp>
 
 // Headers das Features
 #include <AndromedaClient/Features/CVisual/CTimerC4.hpp>
@@ -113,6 +114,9 @@ auto CVisual::OnClientOutput() -> void
 
 auto CVisual::OnCreateMove() -> void
 {
+    if ( SDK::Interfaces::EngineToClient()->IsInGame() )
+        CCameraView::SetThirdPerson( Settings::Visual::ThirdPerson );
+
     if ( !Settings::Visual::Active )
         return;
 

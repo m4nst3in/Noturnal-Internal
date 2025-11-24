@@ -30,6 +30,7 @@ auto CAndromedaMenu::OnRenderMenu() -> void
                 ImGui::Text( XorStr( "ESP" ) );
                 ImGui::Separator();
                 ImGui::Checkbox( XorStr( "Enable" ) , &Settings::Visual::Active );
+                ImGui::Checkbox( XorStr( "Third Person" ) , &Settings::Visual::ThirdPerson );
                 ImGui::Checkbox( XorStr( "Show Allies" ) , &Settings::Visual::Team );
                 ImGui::Checkbox( XorStr( "Show Enemies" ) , &Settings::Visual::Enemy );
                 ImGui::Checkbox( XorStr( "Show Box" ) , &Settings::Visual::PlayerBox );

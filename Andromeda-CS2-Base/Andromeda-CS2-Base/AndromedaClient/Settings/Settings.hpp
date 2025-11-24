@@ -11,6 +11,7 @@ namespace Settings
         inline auto Team = true;
         inline auto Enemy = true;
         inline auto PlayerBox = true;
+        inline auto ThirdPerson = false;
 
         inline auto PlayerBoxType = 3;
 
