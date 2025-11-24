@@ -18,10 +18,7 @@ auto CAndromedaMenu::OnRenderMenu() -> void
     {
         if ( ImGui::BeginTabBar( XorStr( "MainTabs" ) , ImGuiTabBarFlags_None ) )
         {
-            if ( ImGui::BeginTabItem( XorStr( "Rage" ) ) )
-            {
-                ImGui::EndTabItem();
-            }
+            
 
             
 
