@@ -144,11 +144,14 @@
     <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Features\CVisual\CWorldESP.cpp" />
     <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Features\CVisual\CTimerC4.cpp" />
     <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Features\CVisual\CTrajectoryPhysics.cpp" />
+    <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Features\CVisual\CCameraView.cpp" />
     <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Fonts\CFont.cpp" />
     <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Fonts\CFontManager.cpp" />
     <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\GUI\CAndromedaMenu.cpp" />
     <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Render\CRender.cpp" />
     <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Render\CRenderStackSystem.cpp" />
+    <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Fonts\MontserratBytes.cpp" />
+    <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Fonts\FontAwesomeBytes.cpp" />
     <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Settings\CSettingsJson.cpp" />
     <ClCompile Include="Andromeda-CS2-Base\Common\CrashLog.cpp" />
     <ClCompile Include="Andromeda-CS2-Base\Common\DevLog.cpp" />
@@ -263,6 +266,8 @@
     <ClInclude Include="Andromeda-CS2-Base\AndromedaClient\GUI\CAndromedaMenu.hpp" />
     <ClInclude Include="Andromeda-CS2-Base\AndromedaClient\Render\CRender.hpp" />
     <ClInclude Include="Andromeda-CS2-Base\AndromedaClient\Render\CRenderStackSystem.hpp" />
+    <ClInclude Include="Andromeda-CS2-Base\AndromedaClient\Fonts\MontserratBytes.hpp" />
+    <ClInclude Include="Andromeda-CS2-Base\AndromedaClient\Fonts\FontAwesomeBytes.hpp" />
     <ClInclude Include="Andromeda-CS2-Base\AndromedaClient\Settings\CSettingsJson.hpp" />
     <ClInclude Include="Andromeda-CS2-Base\AndromedaClient\Settings\Settings.hpp" />
     <ClInclude Include="Andromeda-CS2-Base\Common\Base64.h" />

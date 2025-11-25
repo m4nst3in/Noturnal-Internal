@@ -5,13 +5,15 @@
 #include <CS2/SDK/Math/Rect_t.hpp>
 
 class CCSPlayerController;
+class CCSGOInput;
+class CUserCmd;
 
 class IVisual
 {
 public:
-	virtual void OnRender() = 0;
-	virtual void OnClientOutput() = 0;
-	virtual void OnCreateMove() = 0;
+    virtual void OnRender() = 0;
+    virtual void OnClientOutput() = 0;
+    virtual void OnCreateMove(CCSGOInput* pInput, CUserCmd* pUserCmd) = 0;
 };
 
 class CVisual final : public IVisual
@@ -19,7 +21,7 @@ class CVisual final : public IVisual
 public:
     virtual void OnRender() override;
     virtual void OnClientOutput() override;
-    virtual void OnCreateMove() override;
+    virtual void OnCreateMove(CCSGOInput* pInput, CUserCmd* pUserCmd) override;
 
 public:
     enum EVisualBoxType_t : int32_t

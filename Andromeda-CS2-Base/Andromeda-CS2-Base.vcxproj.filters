@@ -402,6 +402,12 @@
     <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Render\CRenderStackSystem.cpp">
       <Filter>Andromeda-CS2-Base\AndromedaClient\Render</Filter>
     </ClCompile>
+    <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Fonts\MontserratBytes.cpp">
+      <Filter>Andromeda-CS2-Base\AndromedaClient\Fonts</Filter>
+    </ClCompile>
+    <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Fonts\FontAwesomeBytes.cpp">
+      <Filter>Andromeda-CS2-Base\AndromedaClient\Fonts</Filter>
+    </ClCompile>
     <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Fonts\CFont.cpp">
       <Filter>Andromeda-CS2-Base\AndromedaClient\Fonts</Filter>
     </ClCompile>
@@ -448,6 +454,9 @@
       <Filter>Andromeda-CS2-Base\AndromedaClient\GUI</Filter>
     </ClCompile>
     <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Features\CVisual\CVisual.cpp">
+      <Filter>Andromeda-CS2-Base\AndromedaClient\Features</Filter>
+    </ClCompile>
+    <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Features\CVisual\CCameraView.cpp">
       <Filter>Andromeda-CS2-Base\AndromedaClient\Features</Filter>
     </ClCompile>
     <ClCompile Include="Andromeda-CS2-Base\GameClient\CL_Bones.cpp">
@@ -1018,6 +1027,12 @@
     </ClInclude>
     <ClInclude Include="Andromeda-CS2-Base\AndromedaClient\Render\CRenderStackSystem.hpp">
       <Filter>Andromeda-CS2-Base\AndromedaClient\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="Andromeda-CS2-Base\AndromedaClient\Fonts\MontserratBytes.hpp">
+      <Filter>Andromeda-CS2-Base\AndromedaClient\Fonts</Filter>
+    </ClInclude>
+    <ClInclude Include="Andromeda-CS2-Base\AndromedaClient\Fonts\FontAwesomeBytes.hpp">
+      <Filter>Andromeda-CS2-Base\AndromedaClient\Fonts</Filter>
     </ClInclude>
     <ClInclude Include="Andromeda-CS2-Base\AndromedaClient\Fonts\CFont.hpp">
       <Filter>Andromeda-CS2-Base\AndromedaClient\Fonts</Filter>

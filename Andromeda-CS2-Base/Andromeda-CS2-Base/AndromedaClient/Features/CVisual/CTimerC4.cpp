@@ -109,12 +109,13 @@ auto RenderTimerC4( C_PlantedC4* pPlanted , const Rect_t& bbox , bool bHasBBox )
     const int sec = static_cast<int>( timeToBlow ); const int msec = static_cast<int>( ( timeToBlow - sec ) * 1000.f );
     GetRenderStackSystem()->DrawString( &GetFontManager()->m_VerdanaFont , center1 , FW1_CENTER , timerColor , "C4: %02d.%03d" , sec , msec );
 
-    if ( !isDefusing )
     {
-        const ImColor defCol = ImColor( 255 , 255 , 255 , 200 ); const char* siteTxt = nullptr; if ( Settings::Visual::ShowC4SiteLabel ) siteTxt = pPlanted->m_nBombSite() == 0 ? "SITE A" : "SITE B"; GetRenderStackSystem()->DrawString( &GetFontManager()->m_VerdanaFont , center2 , FW1_CENTER , defCol , siteTxt ? siteTxt : "NOT DEFUSING" );
+        const ImColor defCol = ImColor( 255 , 255 , 255 , 200 );
+        const char* siteTxt = pPlanted->m_nBombSite() == 0 ? "SITE A" : "SITE B";
+        GetRenderStackSystem()->DrawString( &GetFontManager()->m_VerdanaFont , center2 , FW1_CENTER , defCol , siteTxt );
     }
 
-    if ( Settings::Visual::ShowC4ProgressBar )
+    if ( Settings::Visual::ShowC4Timer )
     {
         const uint32_t id = pPlanted->pEntityIdentity()->Handle().GetEntryIndex(); if ( s_BombStart.find( id ) == s_BombStart.end() ) s_BombStart[id] = now;
         const float totalLen = std::max( 0.1f , std::max( 0.f , pPlanted->m_flC4Blow().m_Value - s_BombStart[id] ) ); const float frac = std::clamp( timeToBlow / totalLen , 0.f , 1.f );
@@ -126,7 +127,7 @@ auto RenderTimerC4( C_PlantedC4* pPlanted , const Rect_t& bbox , bool bHasBBox )
         }
     }
 
-    if ( Settings::Visual::ShowC4Damage )
+    if ( Settings::Visual::ShowC4Timer )
     {
         auto* lpCtrl = GetCL_Players()->GetLocalPlayerController(); if ( lpCtrl )
         {
@@ -137,7 +138,7 @@ auto RenderTimerC4( C_PlantedC4* pPlanted , const Rect_t& bbox , bool bHasBBox )
                 if ( dist <= lethalR ) { dCol = ImColor( Settings::Visual::C4DamageLethalColor[0] , Settings::Visual::C4DamageLethalColor[1] , Settings::Visual::C4DamageLethalColor[2] , Settings::Visual::C4DamageLethalColor[3] ); GetRenderStackSystem()->DrawString( &GetFontManager()->m_VerdanaFont , center3 , FW1_CENTER , dCol , "LETHAL" ); }
                 else if ( dist <= maxR ) { dCol = ImColor( Settings::Visual::C4DamageWarnColor[0] , Settings::Visual::C4DamageWarnColor[1] , Settings::Visual::C4DamageWarnColor[2] , Settings::Visual::C4DamageWarnColor[3] ); const float k = ( dist - lethalR ) / ( maxR - lethalR ); const float dmg = 80.f * ( 1.f - k ) + 10.f; GetRenderStackSystem()->DrawString( &GetFontManager()->m_VerdanaFont , center3 , FW1_CENTER , dCol , "DMG: %.0f" , dmg ); }
                 else { GetRenderStackSystem()->DrawString( &GetFontManager()->m_VerdanaFont , center3 , FW1_CENTER , dCol , "SAFE" ); }
-                if ( Settings::Visual::ShowC4Radius ) { GetRender()->DrawCircle3D( bombOrigin , lethalR , ImColor( Settings::Visual::C4DamageLethalColor[0] , Settings::Visual::C4DamageLethalColor[1] , Settings::Visual::C4DamageLethalColor[2] , Settings::Visual::C4DamageLethalColor[3] ) ); GetRender()->DrawCircle3D( bombOrigin , maxR , ImColor( Settings::Visual::C4DamageWarnColor[0] , Settings::Visual::C4DamageWarnColor[1] , Settings::Visual::C4DamageWarnColor[2] , Settings::Visual::C4DamageWarnColor[3] ) ); }
+                
             }
         }
     }
@@ -152,7 +153,9 @@ auto RenderTimerC4( C_PlantedC4* pPlanted , const Rect_t& bbox , bool bHasBBox )
         }
         if ( havePos )
         {
-            const ImColor defCol = ImColor( 0 , 150 , 255 , 255 ); GetRender()->DrawCircleFilled( iconPos , 6.f , defCol ); GetRender()->DrawCircle( iconPos , 7.f , ImColor( 255 , 255 , 255 , 200 ) ); if ( Settings::Visual::ShowDefuserProgressRing ) { const float dfrac = std::clamp( 1.f - ( defuseRemain / defuseLen ) , 0.f , 1.f ); const float radius = 9.f; const float start = -M_PI_F * 0.5f; const float end = start + dfrac * ( M_PI_F * 2.f ); const float step = M_PI_F * 2.f / 48.f; ImVec2 prev = iconPos; for ( float a = start; a <= end; a += step ) { const ImVec2 pt = ImVec2( iconPos.x + cosf( a ) * radius , iconPos.y + sinf( a ) * radius ); GetRender()->DrawLine( prev , pt , defCol , 2.f ); prev = pt; } }
+            const ImColor defCol = ImColor( 0 , 150 , 255 , 255 );
+            GetRender()->DrawCircleFilled( iconPos , 6.f , defCol );
+            GetRender()->DrawCircle( iconPos , 7.f , ImColor( 255 , 255 , 255 , 200 ) );
         }
     }
 }

@@ -10,6 +10,9 @@
 #include <AndromedaClient/Fonts/CFontManager.hpp>
 #include <AndromedaClient/Render/CRenderStackSystem.hpp>
 #include <AndromedaClient/Features/CVisual/CVisual.hpp>
+#include <GameClient/CL_Weapons.hpp>
+#include <CS2/SDK/FunctionListSDK.hpp>
+
 
 #include <GameClient/CEntityCache/CEntityCache.hpp>
 
@@ -48,10 +51,10 @@ auto CAndromedaClient::OnRender() -> void
 	GetFontManager()->FirstInitFonts();
 	GetFontManager()->m_VerdanaFont.DrawString( 1 , 1 , ImColor( 255 , 255 , 0 ) , FW1_LEFT , XorStr( CHEAT_NAME ) );
 
-	if ( SDK::Interfaces::EngineToClient()->IsInGame() )
-	{
-		GetRenderStackSystem()->OnRenderStack();
-	}
+    if ( SDK::Interfaces::EngineToClient()->IsInGame() )
+    {
+        GetRenderStackSystem()->OnRenderStack();
+    }
 }
 
 auto CAndromedaClient::OnClientOutput() -> void
@@ -64,7 +67,7 @@ auto CAndromedaClient::OnClientOutput() -> void
 
 auto CAndromedaClient::OnCreateMove( CCSGOInput* pInput , CUserCmd* pUserCmd ) -> void
 {
-    GetVisual()->OnCreateMove();
+    GetVisual()->OnCreateMove(pInput, pUserCmd);
 }
 
 auto GetAndromedaClient() -> CAndromedaClient*

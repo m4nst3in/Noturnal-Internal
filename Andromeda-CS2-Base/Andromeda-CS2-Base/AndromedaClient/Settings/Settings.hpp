@@ -2,6 +2,9 @@
 
 #include <Common/Common.hpp>
 #include <ImGui/imgui.h>
+#include <unordered_map>
+#include <vector>
+#include <GameClient/CL_ItemDefinition.hpp>
 
 namespace Settings
 {
@@ -38,7 +41,7 @@ namespace Settings
         inline float WeaponGradientBottom[4] = { 0.f , 0.f , 1.f , 1.f };
         inline float WeaponRGBSpeed = 1.0f;
 
-        inline auto ShowWorldWeapons = false;
+        inline auto ShowWorldWeapons = true;
         inline auto WorldWeaponColorMode = 0;
         inline float WorldWeaponCustomColor[4] = { 1.f , 1.f , 1.f , 1.f };
         inline float WorldWeaponGradientTop[4] = { 1.f , 1.f , 1.f , 1.f };
@@ -112,88 +115,25 @@ namespace Settings
         inline auto MenuStyle = 0;
     }
     
-    namespace RageBot
+    namespace Legit
     {
-        // General settings
-        inline auto Enabled = false;
-        inline auto SilentAim = true;
-        inline auto AutoFire = true;
-        inline auto AutoScope = true;
-        inline auto NoSpread = true;
-        inline auto Penetration = true;
+        // Triggerbot
+        inline auto TriggerbotEnabled = false;
+        inline auto TriggerbotKey = ImGuiKey_MouseLeft; // ALT por padrão
+        inline auto TriggerbotVisibleOnly = true;
+        inline auto TriggerbotAutoScope = true;
+        inline int TriggerbotDelayMs = 50; // Delay em milissegundos
         
-        inline float MaxFOV = 180.0f;
-        inline float MaxDistance = 8192.0f;
-        inline int DelayShot = 0;
+        // Modo de disparo
+        inline auto TriggerbotBurstMode = false; // Para armas semi-auto
+        inline int TriggerbotBurstCount = 3;
         
-        // Target priority (0=FOV, 1=Distance, 2=HP, 3=Threat)
-        inline int TargetPriority = 0;
-        
-        // Multipoint settings
-        inline auto MultipointEnabled = true;
-        inline float MultipointScale = 75.0f;
-        inline auto SafePoints = true;
-        inline auto SafePointOnLimbs = false;
-        inline auto BodyAimFallback = true;
-        
-        // Hitbox selection
-        inline auto TargetHead = true;
-        inline auto TargetChest = true;
-        inline auto TargetPelvis = false;
-        
-        // Per-weapon configs (Pistol)
-        inline int PistolMinDamage = 30;
-        inline int PistolMinDamageVisible = 40;
-        inline int PistolHitchance = 50;
-        inline int PistolHitchanceVisible = 60;
-        inline auto PistolAutoScope = false;
-        inline auto PistolAutoStop = true;
-        
-        // Per-weapon configs (Heavy Pistol)
-        inline int HeavyPistolMinDamage = 40;
-        inline int HeavyPistolMinDamageVisible = 50;
-        inline int HeavyPistolHitchance = 55;
-        inline int HeavyPistolHitchanceVisible = 65;
-        inline auto HeavyPistolAutoScope = false;
-        inline auto HeavyPistolAutoStop = true;
-        
-        // Per-weapon configs (SMG)
-        inline int SMGMinDamage = 25;
-        inline int SMGMinDamageVisible = 35;
-        inline int SMGHitchance = 45;
-        inline int SMGHitchanceVisible = 55;
-        inline auto SMGAutoScope = false;
-        inline auto SMGAutoStop = true;
-        
-        // Per-weapon configs (Rifle)
-        inline int RifleMinDamage = 30;
-        inline int RifleMinDamageVisible = 40;
-        inline int RifleHitchance = 55;
-        inline int RifleHitchanceVisible = 65;
-        inline auto RifleAutoScope = false;
-        inline auto RifleAutoStop = true;
-        
-        // Per-weapon configs (Sniper)
-        inline int SniperMinDamage = 80;
-        inline int SniperMinDamageVisible = 90;
-        inline int SniperHitchance = 70;
-        inline int SniperHitchanceVisible = 80;
-        inline auto SniperAutoScope = true;
-        inline auto SniperAutoStop = true;
-        
-        // Per-weapon configs (Auto Sniper)
-        inline int AutoSniperMinDamage = 60;
-        inline int AutoSniperMinDamageVisible = 70;
-        inline int AutoSniperHitchance = 60;
-        inline int AutoSniperHitchanceVisible = 70;
-        inline auto AutoSniperAutoScope = true;
-        inline auto AutoSniperAutoStop = true;
-        
-        // Overrides
-        inline int DamageOverrideValue = 100;
-        inline auto DamageOverrideActive = false;
-        inline auto SafePointOverrideActive = false;
+        // Smooth (para versões futuras)
+        inline auto TriggerbotSmoothEnabled = false;
+        inline float TriggerbotSmoothAmount = 5.0f;
     }
+    
+    
     
 	namespace Colors
 	{

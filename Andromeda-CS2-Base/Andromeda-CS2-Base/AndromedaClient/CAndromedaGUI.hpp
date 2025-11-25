@@ -30,9 +30,10 @@ public:
 	auto InitFont() -> void;
 
 private:
-	auto SetIndigoStyle() -> void;
-	auto SetVermillionStyle() -> void;
-	auto SetClassicSteamStyle() -> void;
+    auto SetIndigoStyle() -> void;
+    auto SetVermillionStyle() -> void;
+    auto SetClassicSteamStyle() -> void;
+    auto SetNoturnalStyle() -> void;
 
 	enum EAndromedaGuiStyle_t : uint32_t
 	{
@@ -42,7 +43,12 @@ private:
 	};
 
 public:
-	auto UpdateStyle() -> void;
+    auto UpdateStyle() -> void;
+
+public:
+    auto SetExternalFonts( const unsigned char* montserrat_data , size_t montserrat_size , const unsigned char* fa_data , size_t fa_size , float size_px ) -> void;
+    auto LoadFontsFromBytes() -> void;
+    ImFont* GetTitleFont() const { return m_pTitleFont; }
 
 public:
 	virtual bool IsVisible() override
@@ -97,7 +103,15 @@ public:
 	bool m_bVisible = false;
 
 private:
-	ImVec2 m_vecMousePosSave;
+    ImVec2 m_vecMousePosSave;
+
+private:
+    const unsigned char* m_pMontserratData = nullptr;
+    size_t m_uMontserratSize = 0;
+    const unsigned char* m_pFontAwesomeData = nullptr;
+    size_t m_uFontAwesomeSize = 0;
+    float m_fFontSizePx = 18.0f;
+    ImFont* m_pTitleFont = nullptr;
 
 private:
 	struct FreeTypeBuild

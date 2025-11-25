@@ -1,7 +1,9 @@
 #pragma once
 
+class CCSGOInput;
+
 class CCameraView
 {
 public:
-    static auto SetThirdPerson(bool enable) -> void;
+    static auto SetThirdPerson(CCSGOInput* input, bool enable) -> void;
 };

@@ -1,227 +1,318 @@
 #include "CAndromedaMenu.hpp"
 
 #include <ImGui/imgui.h>
+#include <algorithm>
+#include <vector>
+#include <string>
 
 #include <AndromedaClient/Settings/Settings.hpp>
 #include <AndromedaClient/CAndromedaGUI.hpp>
 
 static CAndromedaMenu g_CAndromedaMenu{};
+#ifdef max
+#undef max
+#endif
+#ifdef min
+#undef min
+#endif
+static inline const char* Utf8( const char8_t* s ) { return reinterpret_cast<const char*>( s ); }
+static float CalcItemWidth( const char* const* items , int count , int idx )
+{
+    if ( count <= 0 ) return 140.0f;
+    int i = ( idx >= 0 && idx < count ) ? idx : 0;
+    ImVec2 ts = ImGui::CalcTextSize( items[i] );
+    return ts.x + 60.0f;
+}
+
+static bool AnimatedCheckbox( const char* label , bool* v )
+{
+    static std::unordered_map<ImGuiID,float> s_anim; const ImGuiID id = ImGui::GetID( label );
+    bool changed = ImGui::Checkbox( label , v );
+    float& a = s_anim[id]; float dt = ImGui::GetIO().DeltaTime; float speed = 6.0f;
+    if ( *v ) a = std::min( 1.0f , a + dt * speed ); else a = 0.0f;
+    ImVec2 min = ImGui::GetItemRectMin(); ImVec2 max = ImGui::GetItemRectMax();
+    float h = max.y - min.y; float box = h; ImVec2 bmin = min; ImVec2 bmax = ImVec2( min.x + box , min.y + box );
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    float inset = 3.0f;
+    if ( *v && a < 0.999f )
+    {
+        ImVec2 coverMin = ImVec2( bmin.x + inset , bmin.y + inset );
+        ImVec2 coverMax = ImVec2( bmin.x + inset + ( box - inset*2 ) * ( 1.0f - a ) , bmax.y - inset );
+        ImU32 coverCol = ImGui::GetColorU32( ImGui::GetStyle().Colors[ ImGui::IsItemHovered() ? ImGuiCol_FrameBgHovered : ImGuiCol_FrameBg ] );
+        dl->AddRectFilled( coverMin , coverMax , coverCol , 2.0f );
+    }
+    return changed;
+}
+
+static bool ThinSliderFloat( const char* id , float* v , float v_min , float v_max , const char* format )
+{
+    ImGui::PushStyleVar( ImGuiStyleVar_FramePadding , ImVec2( 2.0f , 2.0f ) );
+    ImGui::PushStyleVar( ImGuiStyleVar_GrabMinSize , 0.0f );
+    ImGui::PushStyleVar( ImGuiStyleVar_GrabRounding , 100.0f );
+    ImGui::PushStyleColor( ImGuiCol_SliderGrab , ImVec4( 0 , 0 , 0 , 0 ) );
+    ImGui::PushStyleColor( ImGuiCol_SliderGrabActive , ImVec4( 0 , 0 , 0 , 0 ) );
+    bool changed = ImGui::SliderFloat( id , v , v_min , v_max , format );
+    ImVec2 rmin = ImGui::GetItemRectMin(); ImVec2 rmax = ImGui::GetItemRectMax();
+    float frac = ( *v - v_min ) / ( v_max - v_min ); if ( frac < 0.f ) frac = 0.f; if ( frac > 1.f ) frac = 1.f;
+    float padX = 6.0f;
+    float cx = rmin.x + padX + frac * ( ( rmax.x - rmin.x ) - padX * 2.0f );
+    float cy = ( rmin.y + rmax.y ) * 0.5f;
+    float rad = 7.0f;
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImU32 knobCol = ImColor( 140 , 0 , 255 , 255 );
+    dl->AddCircleFilled( ImVec2( cx , cy ) , rad , knobCol );
+    dl->AddCircle( ImVec2( cx , cy ) , rad + 1.0f , ImColor( 255 , 255 , 255 , 60 ) );
+    ImGui::PopStyleColor( 2 );
+    ImGui::PopStyleVar( 3 );
+    return changed;
+}
+
+struct GBContext { ImVec2 rectMin; float width; ImVec2 titleSize; std::string title; ImDrawList* dl; float rounding; };
+static std::vector<GBContext> g_GBStack;
+
+static bool BeginGroupBox( const char* id , const char* title , ImVec2 size )
+{
+    ImVec2 avail = ImGui::GetContentRegionAvail();
+    float width = size.x <= 0.0f ? avail.x : size.x;
+    ImVec2 rectMin = ImGui::GetCursorScreenPos();
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    float rounding = 12.0f;
+
+    GBContext ctx{ rectMin , width , ImGui::CalcTextSize( title ) , std::string( title ) , dl , rounding };
+    g_GBStack.push_back( ctx );
+
+    dl->ChannelsSplit( 2 );
+    dl->ChannelsSetCurrent( 1 );
+
+    ImGuiStyle& style = ImGui::GetStyle();
+    ImGui::PushStyleVar( ImGuiStyleVar_WindowPadding , ImVec2( 18.0f , 18.0f ) );
+    ImGui::PushStyleVar( ImGuiStyleVar_ItemSpacing , ImVec2( style.ItemSpacing.x , 8.0f ) );
+    ImGui::PushStyleVar( ImGuiStyleVar_FramePadding , ImVec2( 3.0f , 3.0f ) );
+    ImGui::PushStyleVar( ImGuiStyleVar_GrabMinSize , 6.0f );
+    ImGui::PushStyleVar( ImGuiStyleVar_FrameRounding , 3.0f );
+    ImGui::PushStyleVar( ImGuiStyleVar_GrabRounding , 100.0f );
+    ImGui::PushStyleVar( ImGuiStyleVar_PopupRounding , 6.0f );
+
+    ImGui::Dummy( ImVec2( 0.0f , ctx.titleSize.y + 6.0f ) );
+    ImGui::Indent( 12.0f );
+    ImGui::BeginGroup();
+    return true;
+}
+
+static void EndGroupBox()
+{
+    ImGui::EndGroup();
+    GBContext ctx = g_GBStack.back();
+    g_GBStack.pop_back();
+
+    ImVec2 rectMax = ImGui::GetCursorScreenPos();
+    rectMax.x = ctx.rectMin.x + ctx.width;
+    rectMax.y += 24.0f; // bottom padding
+
+    ImU32 bg = ImColor( 0 , 0 , 0 , 220 );
+    ImU32 border = ImColor( 34 , 39 , 46 , 255 );
+    ImU32 glow1 = ImColor( 140 , 0 , 255 , 60 );
+    ImU32 glow2 = ImColor( 140 , 0 , 255 , 36 );
+    ImU32 glow3 = ImColor( 140 , 0 , 255 , 18 );
+
+    ctx.dl->ChannelsSetCurrent( 0 );
+    ctx.dl->AddRectFilled( ctx.rectMin , rectMax , bg , ctx.rounding );
+    ImVec2 g1min = ImVec2( ctx.rectMin.x - 2.0f , ctx.rectMin.y - 2.0f );
+    ImVec2 g1max = ImVec2( rectMax.x + 2.0f , rectMax.y + 2.0f );
+    ImVec2 g2min = ImVec2( ctx.rectMin.x - 5.0f , ctx.rectMin.y - 5.0f );
+    ImVec2 g2max = ImVec2( rectMax.x + 5.0f , rectMax.y + 5.0f );
+    ImVec2 g3min = ImVec2( ctx.rectMin.x - 8.0f , ctx.rectMin.y - 8.0f );
+    ImVec2 g3max = ImVec2( rectMax.x + 8.0f , rectMax.y + 8.0f );
+    ctx.dl->AddRect( g1min , g1max , glow1 , ctx.rounding + 2.0f , 0 , 2.0f );
+    ctx.dl->AddRect( g2min , g2max , glow2 , ctx.rounding + 5.0f , 0 , 2.0f );
+    ctx.dl->AddRect( g3min , g3max , glow3 , ctx.rounding + 8.0f , 0 , 1.0f );
+    ctx.dl->AddRect( ctx.rectMin , rectMax , border , ctx.rounding , 0 , 2.0f );
+
+    ImVec2 center = ImVec2( ctx.rectMin.x + ( ctx.width * 0.5f ) , ctx.rectMin.y + 12.0f );
+    ImVec2 textPos = ImVec2( center.x - ctx.titleSize.x * 0.5f , center.y - ctx.titleSize.y * 0.5f );
+    ctx.dl->AddText( textPos , ImColor( 240 , 240 , 255 , 255 ) , ctx.title.c_str() );
+
+    ctx.dl->ChannelsMerge();
+    ImGui::Unindent( 12.0f );
+    ImGui::PopStyleVar(7);
+}
 
 auto CAndromedaMenu::OnRenderMenu() -> void
 {
-    const float MenuAlpha = static_cast<float>( Settings::Misc::MenuAlpha ) / 255.f;
-
-    ImGui::PushStyleVar( ImGuiStyleVar_Alpha , MenuAlpha );
-    ImGui::SetNextWindowSize( ImVec2( 500 , 500 ) , ImGuiCond_FirstUseEver );
-
-    if ( ImGui::Begin( XorStr( CHEAT_NAME ) , 0 ) )
+    static float s_fade = 0.0f;
+    if ( !GetAndromedaGUI()->IsVisible() ) s_fade = 0.0f;
+    s_fade = std::clamp( s_fade + ImGui::GetIO().DeltaTime * 3.0f , 0.0f , 1.0f );
+    ImGui::PushStyleVar( ImGuiStyleVar_Alpha , s_fade );
+    ImGui::SetNextWindowSize( ImVec2( 960 , 640 ) , ImGuiCond_Always );
+    const ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoTitleBar;
+    if ( ImGui::Begin( XorStr( CHEAT_NAME ) , 0 , windowFlags ) )
     {
-        if ( ImGui::BeginTabBar( XorStr( "MainTabs" ) , ImGuiTabBarFlags_None ) )
+        const char* title = "Noturnal";
+        ImFont* font = GetAndromedaGUI()->GetTitleFont() ? GetAndromedaGUI()->GetTitleFont() : ImGui::GetFont();
+        float titleSizePx = font->FontSize; 
+        ImVec2 cursorStart = ImGui::GetCursorScreenPos();
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        ImU32 colStart = ImColor( 140 , 0 , 255 , 255 );
+        ImU32 colEnd = ImColor( 255 , 255 , 255 , 255 );
+        const char* p = title;
+        ImVec2 pos = ImVec2( floorf( cursorStart.x ) , floorf( cursorStart.y + 4.0f ) );
+        float x = pos.x;
+        float total = font->CalcTextSizeA( titleSizePx , FLT_MAX , 0.0f , title , nullptr , nullptr ).x;
+        while ( *p )
         {
-            
-
-            
-
-            if ( ImGui::BeginTabItem( XorStr( "Visuals" ) ) )
+            const char* chStart = p;
+            ImWchar c = (ImWchar)*p;
+            if ( (unsigned char)c < 0x80 ) { p++; }
+            else { p++; while ( (unsigned char)*p && ((unsigned char)*p & 0xC0) == 0x80 ) p++; }
+            ImVec2 chSize = font->CalcTextSizeA( titleSizePx , FLT_MAX , 0.0f , chStart , p , nullptr );
+            float t = ( x - pos.x ) / ( total > 0.f ? total : 1.f );
+            ImVec4 a = ImGui::ColorConvertU32ToFloat4( colStart );
+            ImVec4 b = ImGui::ColorConvertU32ToFloat4( colEnd );
+            ImVec4 ccol = ImVec4( a.x + ( b.x - a.x ) * t , a.y + ( b.y - a.y ) * t , a.z + ( b.z - a.z ) * t , a.w + ( b.w - a.w ) * t );
+            ImU32 col = ImGui::ColorConvertFloat4ToU32( ccol );
+            dl->AddText( font , titleSizePx , ImVec2( floorf( x ) , pos.y ) , col , chStart , p );
+            x += chSize.x;
+        }
+        float titleAdvance = total;
+        ImGui::SetCursorScreenPos( ImVec2( cursorStart.x + titleAdvance + 8.0f , cursorStart.y + 1.0f ) );
+        ImGui::PushStyleVar( ImGuiStyleVar_FramePadding , ImVec2( 12.0f , 8.0f ) );
+        ImGui::PushStyleVar( ImGuiStyleVar_FrameBorderSize , 0.0f );
+        if ( ImGui::BeginTabBar( XorStr( "MainTabs" ) , ImGuiTabBarFlags_NoCloseWithMiddleMouseButton ) )
+        {
+            ImVec2 afterTabPos = ImGui::GetCursorScreenPos();
+            ImVec2 coverMin = ImVec2( afterTabPos.x , afterTabPos.y - 10.0f );
+            ImVec2 coverMax = ImVec2( afterTabPos.x + ImGui::GetContentRegionAvail().x , afterTabPos.y + 2.0f );
+            ImU32 coverCol = ImGui::ColorConvertFloat4ToU32( ImGui::GetStyle().Colors[ImGuiCol_WindowBg] );
+            ImGui::GetWindowDrawList()->AddRectFilled( coverMin , coverMax , coverCol );
+            if ( ImGui::BeginTabItem( Utf8( u8"\uf06d  Rage" ) ) )
             {
+                ImGui::SetCursorPosY( ImGui::GetCursorPosY() - 2.0f );
+                ImGui::EndTabItem();
+            }
+            if ( ImGui::BeginTabItem( Utf8( u8"\uf140  Legit" ) ) )
+            {
+                ImGui::SetCursorPosY( ImGui::GetCursorPosY() - 2.0f );
+                ImGui::EndTabItem();
+            }
+            if ( ImGui::BeginTabItem( Utf8( u8"\uf06e  Visuals" ) ) )
+            {
+                ImGui::SetCursorPosY( ImGui::GetCursorPosY() - 2.0f );
                 ImGui::Columns( 3 , 0 , false );
-
-                ImGui::BeginChild( XorStr( "Group_Visuals_ESP" ) , ImVec2( 0 , 180 ) , true );
-                ImGui::Text( XorStr( "ESP" ) );
-                ImGui::Separator();
-                ImGui::Checkbox( XorStr( "Enable" ) , &Settings::Visual::Active );
-                ImGui::Checkbox( XorStr( "Third Person" ) , &Settings::Visual::ThirdPerson );
-                ImGui::Checkbox( XorStr( "Show Allies" ) , &Settings::Visual::Team );
-                ImGui::Checkbox( XorStr( "Show Enemies" ) , &Settings::Visual::Enemy );
-                ImGui::Checkbox( XorStr( "Show Box" ) , &Settings::Visual::PlayerBox );
-                const char* boxTypes[] = { "Box" , "Outline Box" , "Coal Box" , "Outline Coal Box" };
-                ImGui::Combo( XorStr( "Box type" ) , &Settings::Visual::PlayerBoxType , boxTypes , IM_ARRAYSIZE( boxTypes ) );
-                const char* modes[] = { "Team default" , "Custom" , "Gradient" , "RGB" };
-                ImGui::Combo( XorStr( "Box color mode" ) , &Settings::Visual::BoxColorMode , modes , IM_ARRAYSIZE( modes ) );
-                if ( Settings::Visual::BoxColorMode == 1 )
+                BeginGroupBox( XorStr( "Group_Visuals_ESP" ) , XorStr( "ESP" ) , ImVec2( 0 , 220 ) );
+                AnimatedCheckbox( XorStr( "Enable" ) , &Settings::Visual::Active );
+                AnimatedCheckbox( XorStr( "Show Allies" ) , &Settings::Visual::Team );
+                AnimatedCheckbox( XorStr( "Show Enemies" ) , &Settings::Visual::Enemy );
+                AnimatedCheckbox( XorStr( "Show Box" ) , &Settings::Visual::PlayerBox );
                 {
-                    ImGui::ColorEdit4( XorStr( "Custom color" ) , Settings::Visual::BoxCustomColor , ImGuiColorEditFlags_NoInputs );
+                    const char* boxTypes[] = { "Box" , "Outline Box" , "Coal Box" , "Outline Coal Box" };
+                    ImGui::PushItemWidth( CalcItemWidth( boxTypes , IM_ARRAYSIZE( boxTypes ) , Settings::Visual::PlayerBoxType ) );
+                    ImGui::PushStyleVar( ImGuiStyleVar_WindowPadding , ImVec2( 4.0f , 4.0f ) );
+                    ImGui::Combo( XorStr( "Box type" ) , &Settings::Visual::PlayerBoxType , boxTypes , IM_ARRAYSIZE( boxTypes ) );
+                    ImGui::PopStyleVar();
+                    ImGui::PopItemWidth();
                 }
+                {
+                    const char* modes[] = { "Team default" , "Custom" , "Gradient" , "RGB" };
+                    ImGui::PushItemWidth( CalcItemWidth( modes , IM_ARRAYSIZE( modes ) , Settings::Visual::BoxColorMode ) );
+                    ImGui::PushStyleVar( ImGuiStyleVar_WindowPadding , ImVec2( 4.0f , 4.0f ) );
+                    ImGui::Combo( XorStr( "Box color mode" ) , &Settings::Visual::BoxColorMode , modes , IM_ARRAYSIZE( modes ) );
+                    ImGui::PopStyleVar();
+                    ImGui::PopItemWidth();
+                }
+                if ( Settings::Visual::BoxColorMode == 1 )
+                    ImGui::ColorEdit4( XorStr( "Custom color" ) , Settings::Visual::BoxCustomColor , ImGuiColorEditFlags_NoInputs );
                 else if ( Settings::Visual::BoxColorMode == 2 )
                 {
                     ImGui::ColorEdit4( XorStr( "Top" ) , Settings::Visual::BoxGradientTop , ImGuiColorEditFlags_NoInputs );
                     ImGui::ColorEdit4( XorStr( "Bottom" ) , Settings::Visual::BoxGradientBottom , ImGuiColorEditFlags_NoInputs );
-                    ImGui::Text( XorStr( "Gradient fill + outline" ) );
                 }
                 else if ( Settings::Visual::BoxColorMode == 3 )
+                    ThinSliderFloat( XorStr( "##BoxRGBSpeed" ) , &Settings::Visual::BoxRGBSpeed , 0.1f , 5.0f , XorStr( "%.2fx" ) );
+                AnimatedCheckbox( XorStr( "Show Name" ) , &Settings::Visual::ShowName );
                 {
-                    ImGui::SliderFloat( XorStr( "RGB speed" ) , &Settings::Visual::BoxRGBSpeed , 0.1f , 5.0f , XorStr( "%.2fx" ) );
+                    const char* posOpts[] = { "Above" , "Below" };
+                    ImGui::PushItemWidth( CalcItemWidth( posOpts , IM_ARRAYSIZE( posOpts ) , Settings::Visual::NamePosition ) );
+                    ImGui::PushStyleVar( ImGuiStyleVar_WindowPadding , ImVec2( 4.0f , 4.0f ) );
+                    ImGui::Combo( XorStr( "Name position" ) , &Settings::Visual::NamePosition , posOpts , IM_ARRAYSIZE( posOpts ) );
+                    ImGui::PopStyleVar();
+                    ImGui::PopItemWidth();
                 }
-
-                ImGui::Separator();
-                ImGui::Checkbox( XorStr( "Show Name" ) , &Settings::Visual::ShowName );
-                const char* posOpts[] = { "Above" , "Below" };
-                ImGui::Combo( XorStr( "Name position" ) , &Settings::Visual::NamePosition , posOpts , IM_ARRAYSIZE( posOpts ) );
-                ImGui::Combo( XorStr( "Name color mode" ) , &Settings::Visual::NameColorMode , modes , IM_ARRAYSIZE( modes ) );
-                if ( Settings::Visual::NameColorMode == 1 )
-                    ImGui::ColorEdit4( XorStr( "Name color" ) , Settings::Visual::NameCustomColor , ImGuiColorEditFlags_NoInputs );
-                else if ( Settings::Visual::NameColorMode == 2 )
+                
+                AnimatedCheckbox( XorStr( "Show Weapon" ) , &Settings::Visual::ShowWeapon );
+                AnimatedCheckbox( XorStr( "Show Dropped" ) , &Settings::Visual::ShowWorldWeapons );
+                AnimatedCheckbox( XorStr( "Show Dropped" ) , &Settings::Visual::ShowWorldWeapons );
+                AnimatedCheckbox( XorStr( "Show Defuser Icon" ) , &Settings::Visual::ShowDefuserIcon );
                 {
-                    ImGui::ColorEdit4( XorStr( "Name top" ) , Settings::Visual::NameGradientTop , ImGuiColorEditFlags_NoInputs );
-                    ImGui::ColorEdit4( XorStr( "Name bottom" ) , Settings::Visual::NameGradientBottom , ImGuiColorEditFlags_NoInputs );
+                    const char* weaponLabelOpts[] = { "Text" , "Icon" };
+                    ImGui::PushItemWidth( CalcItemWidth( weaponLabelOpts , IM_ARRAYSIZE( weaponLabelOpts ) , Settings::Visual::WeaponLabelMode ) );
+                    ImGui::PushStyleVar( ImGuiStyleVar_WindowPadding , ImVec2( 4.0f , 4.0f ) );
+                    ImGui::Combo( XorStr( "Weapon display" ) , &Settings::Visual::WeaponLabelMode , weaponLabelOpts , IM_ARRAYSIZE( weaponLabelOpts ) );
+                    ImGui::PopStyleVar();
+                    ImGui::PopItemWidth();
                 }
-                else if ( Settings::Visual::NameColorMode == 3 )
-                    ImGui::SliderFloat( XorStr( "Name RGB speed" ) , &Settings::Visual::NameRGBSpeed , 0.1f , 5.0f , XorStr( "%.2fx" ) );
-
-                ImGui::Separator();
-                ImGui::Checkbox( XorStr( "Show Weapon" ) , &Settings::Visual::ShowWeapon );
-                ImGui::Checkbox( XorStr( "Show World Weapons" ) , &Settings::Visual::ShowWorldWeapons );
-                ImGui::Combo( XorStr( "World weapons color mode" ) , &Settings::Visual::WorldWeaponColorMode , modes , IM_ARRAYSIZE( modes ) );
-                if ( Settings::Visual::WorldWeaponColorMode == 1 )
-                    ImGui::ColorEdit4( XorStr( "World weapons color" ) , Settings::Visual::WorldWeaponCustomColor , ImGuiColorEditFlags_NoInputs );
-                else if ( Settings::Visual::WorldWeaponColorMode == 2 )
                 {
-                    ImGui::ColorEdit4( XorStr( "World weapons top" ) , Settings::Visual::WorldWeaponGradientTop , ImGuiColorEditFlags_NoInputs );
-                    ImGui::ColorEdit4( XorStr( "World weapons bottom" ) , Settings::Visual::WorldWeaponGradientBottom , ImGuiColorEditFlags_NoInputs );
+                    const char* posOpts[] = { "Above" , "Below" };
+                    ImGui::PushItemWidth( CalcItemWidth( posOpts , IM_ARRAYSIZE( posOpts ) , Settings::Visual::WeaponPosition ) );
+                    ImGui::PushStyleVar( ImGuiStyleVar_WindowPadding , ImVec2( 4.0f , 4.0f ) );
+                    ImGui::Combo( XorStr( "Weapon position" ) , &Settings::Visual::WeaponPosition , posOpts , IM_ARRAYSIZE( posOpts ) );
+                    ImGui::PopStyleVar();
+                    ImGui::PopItemWidth();
                 }
-                else if ( Settings::Visual::WorldWeaponColorMode == 3 )
-                    ImGui::SliderFloat( XorStr( "World weapons RGB speed" ) , &Settings::Visual::WorldWeaponRGBSpeed , 0.1f , 5.0f , XorStr( "%.2fx" ) );
-                const char* weaponLabelOpts[] = { "Text" , "Icon" };
-                ImGui::Combo( XorStr( "Weapon display" ) , &Settings::Visual::WeaponLabelMode , weaponLabelOpts , IM_ARRAYSIZE( weaponLabelOpts ) );
-                ImGui::Combo( XorStr( "Weapon position" ) , &Settings::Visual::WeaponPosition , posOpts , IM_ARRAYSIZE( posOpts ) );
-                ImGui::Combo( XorStr( "Weapon color mode" ) , &Settings::Visual::WeaponColorMode , modes , IM_ARRAYSIZE( modes ) );
-                if ( Settings::Visual::WeaponColorMode == 1 )
-                    ImGui::ColorEdit4( XorStr( "Weapon color" ) , Settings::Visual::WeaponCustomColor , ImGuiColorEditFlags_NoInputs );
-                else if ( Settings::Visual::WeaponColorMode == 2 )
-                {
-                    ImGui::ColorEdit4( XorStr( "Weapon top" ) , Settings::Visual::WeaponGradientTop , ImGuiColorEditFlags_NoInputs );
-                    ImGui::ColorEdit4( XorStr( "Weapon bottom" ) , Settings::Visual::WeaponGradientBottom , ImGuiColorEditFlags_NoInputs );
-                }
-                else if ( Settings::Visual::WeaponColorMode == 3 )
-                    ImGui::SliderFloat( XorStr( "Weapon RGB speed" ) , &Settings::Visual::WeaponRGBSpeed , 0.1f , 5.0f , XorStr( "%.2fx" ) );
-                ImGui::EndChild();
-
+                
+                EndGroupBox();
                 ImGui::NextColumn();
-                ImGui::BeginChild( XorStr( "Group_Visuals_2" ) , ImVec2( 0 , 180 ) , true );
-                ImGui::Text( XorStr( "HUD" ) );
-                ImGui::Separator();
-                ImGui::Checkbox( XorStr( "Show Health Bar" ) , &Settings::Visual::ShowHealthBar );
+                BeginGroupBox( XorStr( "Group_Visuals_2" ) , XorStr( "HUD" ) , ImVec2( 0 , 220 ) );
+                AnimatedCheckbox( XorStr( "Show Health Bar" ) , &Settings::Visual::ShowHealthBar );
                 ImGui::ColorEdit4( XorStr( "Health top" ) , Settings::Visual::HealthGradientTop , ImGuiColorEditFlags_NoInputs );
                 ImGui::ColorEdit4( XorStr( "Health bottom" ) , Settings::Visual::HealthGradientBottom , ImGuiColorEditFlags_NoInputs );
-                ImGui::SliderFloat( XorStr( "Health width" ) , &Settings::Visual::HealthBarWidth , 1.0f , 6.0f , XorStr( "%.1f px" ) );
-                ImGui::Separator();
-                ImGui::Checkbox( XorStr( "Show Reload" ) , &Settings::Visual::ShowReload );
+                ImGui::Text( XorStr( "Health width" ) );
+                ThinSliderFloat( XorStr( "##HealthWidth" ) , &Settings::Visual::HealthBarWidth , 1.0f , 6.0f , XorStr( "%.1f px" ) );
+                AnimatedCheckbox( XorStr( "Show Reload" ) , &Settings::Visual::ShowReload );
                 ImGui::ColorEdit4( XorStr( "Reload color" ) , Settings::Visual::ReloadColor , ImGuiColorEditFlags_NoInputs );
-                ImGui::Separator();
-                ImGui::Checkbox( XorStr( "Show Bomb (C4)" ) , &Settings::Visual::ShowBomb );
+                AnimatedCheckbox( XorStr( "Show Bomb (C4)" ) , &Settings::Visual::ShowBomb );
                 ImGui::ColorEdit4( XorStr( "Bomb color" ) , Settings::Visual::BombColor , ImGuiColorEditFlags_NoInputs );
-                ImGui::Separator();
-                ImGui::Checkbox( XorStr( "Show C4 Timer" ) , &Settings::Visual::ShowC4Timer );
-                ImGui::Checkbox( XorStr( "Show C4 Damage" ) , &Settings::Visual::ShowC4Damage );
-                ImGui::Checkbox( XorStr( "Show C4 Progress Bar" ) , &Settings::Visual::ShowC4ProgressBar );
-                ImGui::Checkbox( XorStr( "Show C4 Radius" ) , &Settings::Visual::ShowC4Radius );
-                ImGui::Checkbox( XorStr( "Show C4 Site Label" ) , &Settings::Visual::ShowC4SiteLabel );
-                ImGui::Checkbox( XorStr( "Show Defuser Icon" ) , &Settings::Visual::ShowDefuserIcon );
-                ImGui::Checkbox( XorStr( "Show Defuser Progress Ring" ) , &Settings::Visual::ShowDefuserProgressRing );
-                ImGui::Separator();
-                ImGui::Checkbox( XorStr( "C4 Timer Fixed on Screen" ) , &Settings::Visual::C4TimerFixed );
-                const char* c4Anchors[] = { "Top Center" , "Bottom Right" };
-                ImGui::Combo( XorStr( "C4 Timer Anchor" ) , &Settings::Visual::C4TimerAnchor , c4Anchors , IM_ARRAYSIZE( c4Anchors ) );
-                ImGui::SliderFloat( XorStr( "C4 Timer X Offset" ) , &Settings::Visual::C4TimerOffsetX , 0.f , 400.f , XorStr( "%.0f px" ) );
-                ImGui::SliderFloat( XorStr( "C4 Timer Y Offset" ) , &Settings::Visual::C4TimerOffsetY , 0.f , 200.f , XorStr( "%.0f px" ) );
-                ImGui::SliderFloat( XorStr( "C4 Timer Bar Width" ) , &Settings::Visual::C4TimerBarWidth , 100.f , 400.f , XorStr( "%.0f px" ) );
-                ImGui::Separator();
-                ImGui::SliderFloat( XorStr( "C4 Lethal Radius" ) , &Settings::Visual::C4LethalRadius , 300.f , 700.f , XorStr( "%.0f" ) );
-                ImGui::SliderFloat( XorStr( "C4 Damage Radius" ) , &Settings::Visual::C4DamageRadius , 600.f , 1200.f , XorStr( "%.0f" ) );
-                ImGui::Separator();
-                ImGui::Text( XorStr( "Grenade ESP" ) );
-                ImGui::Checkbox( XorStr( "Show Grenades" ) , &Settings::Visual::ShowGrenades );
-                ImGui::Checkbox( XorStr( "Trajectory" ) , &Settings::Visual::ShowGrenadeTrajectory );
-                ImGui::Checkbox( XorStr( "Timers" ) , &Settings::Visual::ShowGrenadeTimers );
-                ImGui::Checkbox( XorStr( "Radius" ) , &Settings::Visual::ShowGrenadeRadius );
-                ImGui::Checkbox( XorStr( "Landing marker" ) , &Settings::Visual::ShowGrenadeLandingMarker );
-                ImGui::Checkbox( XorStr( "Team tinted colors" ) , &Settings::Visual::GrenadeTeamTint );
-                ImGui::SliderInt( XorStr( "Max trajectory points" ) , &Settings::Visual::GrenadeTrajectoryMaxPoints , 8 , 64 );
-                ImGui::SliderFloat( XorStr( "Trajectory thickness" ) , &Settings::Visual::GrenadeTrajectoryThickness , 1.f , 4.f , XorStr( "%.1f" ) );
-                ImGui::SliderFloat( XorStr( "HE radius" ) , &Settings::Visual::GrenadeHERadius , 300.f , 600.f , XorStr( "%.0f" ) );
-                ImGui::SliderFloat( XorStr( "Flash radius" ) , &Settings::Visual::GrenadeFlashRadius , 500.f , 900.f , XorStr( "%.0f" ) );
-                ImGui::SliderFloat( XorStr( "Smoke radius" ) , &Settings::Visual::GrenadeSmokeRadius , 100.f , 220.f , XorStr( "%.0f" ) );
-                ImGui::SliderFloat( XorStr( "Molotov radius" ) , &Settings::Visual::GrenadeMolotovRadius , 120.f , 260.f , XorStr( "%.0f" ) );
-                ImGui::SliderFloat( XorStr( "Smoke duration" ) , &Settings::Visual::GrenadeSmokeDuration , 10.f , 25.f , XorStr( "%.0f s" ) );
-                ImGui::SliderFloat( XorStr( "Molotov duration" ) , &Settings::Visual::GrenadeMolotovDuration , 5.f , 12.f , XorStr( "%.0f s" ) );
-                ImGui::Separator();
-                ImGui::Checkbox( XorStr( "Show local prediction" ) , &Settings::Visual::ShowGrenadePrediction );
-                ImGui::SliderFloat( XorStr( "Sim initial speed" ) , &Settings::Visual::GrenadeSimInitialSpeed , 400.f , 1200.f , XorStr( "%.0f" ) );
-                ImGui::SliderFloat( XorStr( "Sim gravity" ) , &Settings::Visual::GrenadeSimGravity , 400.f , 1200.f , XorStr( "%.0f" ) );
-                ImGui::SliderFloat( XorStr( "Sim restitution" ) , &Settings::Visual::GrenadeSimRestitution , 0.1f , 0.9f , XorStr( "%.2f" ) );
-                ImGui::SliderFloat( XorStr( "Sim max time" ) , &Settings::Visual::GrenadeSimMaxTime , 1.f , 5.f , XorStr( "%.1f s" ) );
-                ImGui::SliderFloat( XorStr( "Trail fade after stop" ) , &Settings::Visual::GrenadeTrailFadeTime , 0.5f , 3.0f , XorStr( "%.1f s" ) );
-                ImGui::Separator();
-                ImGui::ColorEdit4( XorStr( "HE color" ) , Settings::Colors::Visual::GrenadeHE , ImGuiColorEditFlags_NoInputs );
-                ImGui::ColorEdit4( XorStr( "Flash color" ) , Settings::Colors::Visual::GrenadeFlash , ImGuiColorEditFlags_NoInputs );
-                ImGui::ColorEdit4( XorStr( "Smoke color" ) , Settings::Colors::Visual::GrenadeSmoke , ImGuiColorEditFlags_NoInputs );
-                ImGui::ColorEdit4( XorStr( "Molotov color" ) , Settings::Colors::Visual::GrenadeMolotov , ImGuiColorEditFlags_NoInputs );
-                ImGui::ColorEdit4( XorStr( "Decoy color" ) , Settings::Colors::Visual::GrenadeDecoy , ImGuiColorEditFlags_NoInputs );
-                ImGui::Separator();
-                ImGui::Text( XorStr( "Team Tinted" ) );
-                ImGui::ColorEdit4( XorStr( "HE ally" ) , Settings::Colors::Visual::GrenadeHE_Ally , ImGuiColorEditFlags_NoInputs );
-                ImGui::ColorEdit4( XorStr( "HE enemy" ) , Settings::Colors::Visual::GrenadeHE_Enemy , ImGuiColorEditFlags_NoInputs );
-                ImGui::ColorEdit4( XorStr( "Flash ally" ) , Settings::Colors::Visual::GrenadeFlash_Ally , ImGuiColorEditFlags_NoInputs );
-                ImGui::ColorEdit4( XorStr( "Flash enemy" ) , Settings::Colors::Visual::GrenadeFlash_Enemy , ImGuiColorEditFlags_NoInputs );
-                ImGui::ColorEdit4( XorStr( "Smoke ally" ) , Settings::Colors::Visual::GrenadeSmoke_Ally , ImGuiColorEditFlags_NoInputs );
-                ImGui::ColorEdit4( XorStr( "Smoke enemy" ) , Settings::Colors::Visual::GrenadeSmoke_Enemy , ImGuiColorEditFlags_NoInputs );
-                ImGui::ColorEdit4( XorStr( "Molotov ally" ) , Settings::Colors::Visual::GrenadeMolotov_Ally , ImGuiColorEditFlags_NoInputs );
-                ImGui::ColorEdit4( XorStr( "Molotov enemy" ) , Settings::Colors::Visual::GrenadeMolotov_Enemy , ImGuiColorEditFlags_NoInputs );
-                ImGui::ColorEdit4( XorStr( "Decoy ally" ) , Settings::Colors::Visual::GrenadeDecoy_Ally , ImGuiColorEditFlags_NoInputs );
-                ImGui::ColorEdit4( XorStr( "Decoy enemy" ) , Settings::Colors::Visual::GrenadeDecoy_Enemy , ImGuiColorEditFlags_NoInputs );
-                ImGui::Combo( XorStr( "C4 timer color mode" ) , &Settings::Visual::C4TimerColorMode , modes , IM_ARRAYSIZE( modes ) );
-                if ( Settings::Visual::C4TimerColorMode == 1 )
-                    ImGui::ColorEdit4( XorStr( "C4 timer color" ) , Settings::Visual::C4TimerCustomColor , ImGuiColorEditFlags_NoInputs );
-                else if ( Settings::Visual::C4TimerColorMode == 2 )
-                {
-                    ImGui::ColorEdit4( XorStr( "C4 timer top" ) , Settings::Visual::C4TimerGradientTop , ImGuiColorEditFlags_NoInputs );
-                    ImGui::ColorEdit4( XorStr( "C4 timer bottom" ) , Settings::Visual::C4TimerGradientBottom , ImGuiColorEditFlags_NoInputs );
-                }
-                else if ( Settings::Visual::C4TimerColorMode == 3 )
-                    ImGui::SliderFloat( XorStr( "C4 timer RGB speed" ) , &Settings::Visual::C4TimerRGBSpeed , 0.1f , 5.0f , XorStr( "%.2fx" ) );
-                ImGui::ColorEdit4( XorStr( "C4 lethal color" ) , Settings::Visual::C4DamageLethalColor , ImGuiColorEditFlags_NoInputs );
-                ImGui::ColorEdit4( XorStr( "C4 warn color" ) , Settings::Visual::C4DamageWarnColor , ImGuiColorEditFlags_NoInputs );
-                ImGui::ColorEdit4( XorStr( "C4 safe color" ) , Settings::Visual::C4DamageSafeColor , ImGuiColorEditFlags_NoInputs );
-                ImGui::EndChild();
-
+                AnimatedCheckbox( XorStr( "Show C4 Timer" ) , &Settings::Visual::ShowC4Timer );
+                
+                
+                EndGroupBox();
                 ImGui::NextColumn();
-                ImGui::BeginChild( XorStr( "Group_Visuals_3" ) , ImVec2( 0 , 180 ) , true );
-                ImGui::Text( XorStr( "Team Colors" ) );
-                ImGui::Separator();
+                BeginGroupBox( XorStr( "Group_Visuals_3" ) , XorStr( "Team Colors" ) , ImVec2( 0 , 220 ) );
                 ImGui::ColorEdit4( XorStr( "TT box" ) , Settings::Colors::Visual::PlayerBoxTT , ImGuiColorEditFlags_NoInputs );
                 ImGui::ColorEdit4( XorStr( "TT visible" ) , Settings::Colors::Visual::PlayerBoxTT_Visible , ImGuiColorEditFlags_NoInputs );
                 ImGui::ColorEdit4( XorStr( "CT box" ) , Settings::Colors::Visual::PlayerBoxCT , ImGuiColorEditFlags_NoInputs );
                 ImGui::ColorEdit4( XorStr( "CT visible" ) , Settings::Colors::Visual::PlayerBoxCT_Visible , ImGuiColorEditFlags_NoInputs );
-                ImGui::EndChild();
-
+                EndGroupBox();
                 ImGui::Columns( 1 );
                 ImGui::EndTabItem();
             }
-
-            if ( ImGui::BeginTabItem( XorStr( "Misc" ) ) )
+            if ( ImGui::BeginTabItem( Utf8( u8"\uf4fe  Inventory" ) ) )
+            {
+                ImGui::SetCursorPosY( ImGui::GetCursorPosY() - 2.0f );
+                ImGui::EndTabItem();
+            }
+            if ( ImGui::BeginTabItem( Utf8( u8"\uf7d9  Misc" ) ) )
             {
                 ImGui::Columns( 1 , 0 , false );
-                ImGui::BeginChild( XorStr( "Group_Misc_2" ) , ImVec2( 0 , 160 ) , true );
-                ImGui::EndChild();
+                BeginGroupBox( XorStr( "Group_Misc_2" ) , XorStr( "Misc" ) , ImVec2( 0 , 160 ) );
+                AnimatedCheckbox( XorStr( "Third Person" ) , &Settings::Visual::ThirdPerson );
+                EndGroupBox();
                 ImGui::Columns( 1 );
                 ImGui::EndTabItem();
             }
-
-            if ( ImGui::BeginTabItem( XorStr( "Inventory" ) ) )
+            if ( ImGui::BeginTabItem( Utf8( u8"\uf013  Settings" ) ) )
             {
+                ImGui::SetCursorPosY( ImGui::GetCursorPosY() - 2.0f );
                 ImGui::EndTabItem();
             }
-
             ImGui::EndTabBar();
+            ImGui::PopStyleVar(2);
         }
     }
-
-	ImGui::End();
-
-	ImGui::PopStyleVar();
+    ImGui::End();
+    ImGui::PopStyleVar();
 }
 
 auto GetAndromedaMenu() -> CAndromedaMenu*
 {
-	return &g_CAndromedaMenu;
+    return &g_CAndromedaMenu;
 }

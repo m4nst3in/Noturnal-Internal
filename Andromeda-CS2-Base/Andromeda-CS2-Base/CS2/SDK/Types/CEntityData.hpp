@@ -56,6 +56,14 @@ class CPlayerPawnComponent
 public:
 };
 
+class CInButtonState;
+
+class CPlayer_MovementServices : public CPlayerPawnComponent
+{
+public:
+    SCHEMA_OFFSET( "CPlayer_MovementServices" , "m_nButtons" , m_nButtons , CInButtonState );
+};
+
 class CEntitySubclassVDataBase
 {
 public:
@@ -208,6 +216,7 @@ public:
 	SCHEMA_OFFSET( "C_EconItemView" , "m_iAccountID" , m_iAccountID , uint32 );
 	SCHEMA_OFFSET( "C_EconItemView" , "m_bInitialized" , m_bInitialized , bool );
 	SCHEMA_OFFSET( "C_EconItemView" , "m_bDisallowSOC" , m_bDisallowSOC , bool );
+	
 
 public:
 	CUSTOM_OFFSET_FIELD( uintptr_t , pCEconItemDescription , 0x200 );
@@ -435,6 +444,7 @@ public:
 	SCHEMA_OFFSET( "C_BasePlayerPawn" , "m_pItemServices" , m_pItemServices , CCSPlayer_ItemServices* );
 	SCHEMA_OFFSET( "C_BasePlayerPawn" , "m_pObserverServices" , m_pObserverServices , CPlayer_ObserverServices* );
 	SCHEMA_OFFSET( "C_BasePlayerPawn" , "m_pCameraServices" , m_pCameraServices , CCSPlayerBase_CameraServices* );
+	SCHEMA_OFFSET( "C_BasePlayerPawn" , "m_pMovementServices" , m_pMovementServices , CPlayer_MovementServices* );
 	SCHEMA_OFFSET( "C_BasePlayerPawn" , "m_vOldOrigin" , m_vOldOrigin , Vector3 );
 	SCHEMA_OFFSET( "C_BasePlayerPawn" , "m_hController" , m_hController , CHandle ); // CCSPlayerController
 };
@@ -448,6 +458,7 @@ public:
 	SCHEMA_OFFSET( "C_CSPlayerPawnBase" , "m_flFlashDuration" , m_flFlashDuration , float32 );
 	SCHEMA_OFFSET( "C_CSPlayerPawnBase" , "m_flLastSpawnTimeIndex" , m_flLastSpawnTimeIndex , GameTime_t );
 	SCHEMA_OFFSET( "C_CSPlayerPawnBase" , "m_bGunGameImmunity" , m_bGunGameImmunity , bool );
+	SCHEMA_OFFSET( "C_CSPlayerPawnBase" , "m_hOriginalController" , m_hOriginalController , CHandle ); // CCSPlayerController
 	//SCHEMA_OFFSET( "C_CSPlayerPawnBase" , "m_angEyeAngles" , m_angEyeAngles , QAngle );
 };
 
@@ -519,6 +530,10 @@ public:
 	PSCHEMA_OFFSET( "C_EconEntity" , "m_AttributeManager" , m_AttributeManager , C_AttributeContainer );
 	SCHEMA_OFFSET( "C_EconEntity" , "m_OriginalOwnerXuidLow" , m_OriginalOwnerXuidLow , uint32 );
 	SCHEMA_OFFSET( "C_EconEntity" , "m_OriginalOwnerXuidHigh" , m_OriginalOwnerXuidHigh , uint32 );
+	SCHEMA_OFFSET( "C_EconEntity" , "m_nFallbackPaintKit" , m_nFallbackPaintKit , int32 );
+    SCHEMA_OFFSET( "C_EconEntity" , "m_nFallbackSeed" , m_nFallbackSeed , int32 );
+    SCHEMA_OFFSET( "C_EconEntity" , "m_flFallbackWear" , m_flFallbackWear , float32 );
+    SCHEMA_OFFSET( "C_EconEntity" , "m_nFallbackStatTrak" , m_nFallbackStatTrak , int32 );
 
 	inline auto GetOriginalOwnerXuid() -> uint64_t
 	{
@@ -540,7 +555,6 @@ public:
 	SCHEMA_OFFSET( "C_CSWeaponBase" , "m_bInReload" , m_bInReload , bool );
 	SCHEMA_OFFSET( "C_CSWeaponBase" , "m_bBurstMode" , m_bBurstMode , bool );
 	SCHEMA_OFFSET( "C_CSWeaponBase" , "m_iOriginalTeamNumber" , m_iOriginalTeamNumber , int32 );
-
 public:
 	auto UpdateCompositeMaterial( CCompositeMaterialOwner* pCCompositeMaterialOwner ) -> void;
 	auto UpdateSubclass() -> void;

@@ -112,10 +112,10 @@ auto CVisual::OnClientOutput() -> void
     OnRender();
 }
 
-auto CVisual::OnCreateMove() -> void
+auto CVisual::OnCreateMove(CCSGOInput* pInput, CUserCmd* pUserCmd) -> void
 {
     if ( SDK::Interfaces::EngineToClient()->IsInGame() )
-        CCameraView::SetThirdPerson( Settings::Visual::ThirdPerson );
+        CCameraView::SetThirdPerson( pInput, Settings::Visual::ThirdPerson );
 
     if ( !Settings::Visual::Active )
         return;

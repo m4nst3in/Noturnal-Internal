@@ -50,6 +50,8 @@ static constexpr auto g_CCSGOInput_m_pInputMoves = 0xB80;
 // F2 0F 11 84 1F
 static constexpr auto g_CCSInputMoves_m_vecViewAngles = 0x430;
 
+static constexpr auto g_CPlayer_MovementServices_m_nButtons = 0x48;
+
 /*
 * CViewSetup:
 00007FFD92B5A41 | 48:8D96 F8040000               | lea rdx,qword ptr ds:[rsi+0x4F8]                                           | offset angView

@@ -1,4 +1,7 @@
 #include "CAndromedaGUI.hpp"
+#include <ImGui/imgui_impl_dx11.h>
+#include <AndromedaClient/Fonts/MontserratBytes.hpp>
+#include <AndromedaClient/Fonts/FontAwesomeBytes.hpp>
 
 #include <ShlObj_core.h>
 #include <Windows.h>
@@ -61,10 +64,11 @@ auto CAndromedaGUI::OnInit( IDXGISwapChain* pSwapChain ) -> void
 	ImGui::GetIO().BackendFlags |= ImGuiBackendFlags_HasSetMousePos;
 
 	ImGui_ImplWin32_Init( m_hCS2Window );
-	ImGui_ImplDX11_Init( m_pDevice , m_pDeviceContext );
+    ImGui_ImplDX11_Init( m_pDevice , m_pDeviceContext );
 
-	InitFont();
-	UpdateStyle();
+    InitFont();
+    LoadFontsFromBytes();
+    UpdateStyle();
 
 	m_WndProc_o = (WNDPROC)SetWindowLongPtrA( m_hCS2Window , GWLP_WNDPROC , (LONG_PTR)GUI_WndProc );
 
@@ -88,30 +92,90 @@ auto CAndromedaGUI::OnDestroy() -> void
 	ImGui_ImplDX11_Shutdown();
 	ImGui_ImplWin32_Shutdown();
 
-	ImGui::DestroyContext();
+    ImGui::DestroyContext();
 
 	m_bInit = false;
 }
 
 auto CAndromedaGUI::InitFont() -> void
 {
-	ImGuiIO& io = ImGui::GetIO();
+    ImGuiIO& io = ImGui::GetIO();
+    io.Fonts->Clear();
+    ImFont* baseFont = nullptr;
 
-	static const ImWchar TahomaRanges[] =
-	{
-		0x0020, 0xFFFC,
-		0,
-	};
+    // --- 1. Carregar Fonte Principal (Base) ---
+    if ( m_pMontserratData && m_uMontserratSize > 0 )
+    {
+        ImFontConfig cfg;
+        cfg.FontDataOwnedByAtlas = false;
+        cfg.PixelSnapH = true;
+        cfg.OversampleH = 2;
+        cfg.OversampleV = 2;
+        baseFont = io.Fonts->AddFontFromMemoryTTF( (void*)m_pMontserratData , (int)m_uMontserratSize , m_fFontSizePx , &cfg );
+    }
+    else
+    {
+        static const ImWchar Range[] = { 0x0020 , 0xFFFC , 0 };
+        wchar_t* szWindowsFontPath = nullptr;
+        if ( SHGetKnownFolderPath( FOLDERID_Fonts , 0 , 0 , &szWindowsFontPath ) == S_OK )
+        {
+            std::wstring TahomaFont = std::wstring( szWindowsFontPath ) + L"\\tahoma.ttf";
+            baseFont = io.Fonts->AddFontFromFileTTF( unicode_to_utf8( TahomaFont ).c_str() , 16.f , nullptr , Range );
+        }
+        CoTaskMemFree( szWindowsFontPath );
+    }
 
-	wchar_t* szWindowsFontPath = nullptr;
+    // --- 2. Carregar Ícones (MergeMode = true) ---
+    // IMPORTANTE: Isso deve ser feito LOGO APÓS a fonte Base e ANTES da fonte de Título
+    if ( m_pFontAwesomeData && m_uFontAwesomeSize > 0 )
+    {
+        ImFontConfig iconCfg;
+        iconCfg.MergeMode = true; // Fundir na última fonte adicionada (baseFont)
+        iconCfg.PixelSnapH = true;
+        iconCfg.FontDataOwnedByAtlas = false;
+        iconCfg.OversampleH = 2;
+        iconCfg.OversampleV = 2;
+        iconCfg.GlyphMinAdvanceX = 0.0f;
+        iconCfg.GlyphOffset = ImVec2( 0.0f , 1.0f ); // Ajuste vertical se necessário
+        
+        // Intervalo padrão do FontAwesome Solid (Verifique se seus ícones estão aqui)
+        static const ImWchar icon_ranges[] = { 0xE000 , 0xF8FF , 0 }; 
+        
+        io.Fonts->AddFontFromMemoryTTF( (void*)m_pFontAwesomeData , (int)m_uFontAwesomeSize , m_fFontSizePx , &iconCfg , icon_ranges );
+    }
 
-	if ( SHGetKnownFolderPath( FOLDERID_Fonts , 0 , 0 , &szWindowsFontPath ) == S_OK )
-	{
-		std::wstring TahomaFont = std::wstring( szWindowsFontPath ) + L"\\tahoma.ttf";
-		io.Fonts->AddFontFromFileTTF( unicode_to_utf8( TahomaFont ).c_str() , 15.f , nullptr , TahomaRanges );
-	}
+    // --- 3. Carregar Fonte de Título (Separada, sem Merge) ---
+    if ( m_pMontserratData && m_uMontserratSize > 0 )
+    {
+        ImFontConfig tcfg;
+        tcfg.FontDataOwnedByAtlas = false;
+        tcfg.PixelSnapH = true;
+        tcfg.OversampleH = 2;
+        tcfg.OversampleV = 2;
+        m_pTitleFont = io.Fonts->AddFontFromMemoryTTF( (void*)m_pMontserratData , (int)m_uMontserratSize , m_fFontSizePx * 1.6f , &tcfg );
+    }
+    else
+    {
+        // Fallback para fonte do Windows se Montserrat não existir
+        static const ImWchar Range[] = { 0x0020 , 0xFFFC , 0 };
+        wchar_t* szWindowsFontPath = nullptr;
+        if ( SHGetKnownFolderPath( FOLDERID_Fonts , 0 , 0 , &szWindowsFontPath ) == S_OK )
+        {
+            std::wstring TahomaFont = std::wstring( szWindowsFontPath ) + L"\\tahoma.ttf";
+            ImFontConfig tcfg{}; tcfg.PixelSnapH = true; tcfg.OversampleH = 2; tcfg.OversampleV = 2;
+            m_pTitleFont = io.Fonts->AddFontFromFileTTF( unicode_to_utf8( TahomaFont ).c_str() , 25.f , &tcfg , Range );
+        }
+        CoTaskMemFree( szWindowsFontPath );
+    }
 
-	CoTaskMemFree( szWindowsFontPath );
+    if ( baseFont )
+        io.FontDefault = baseFont;
+
+    ImGui_ImplDX11_InvalidateDeviceObjects();
+    ImGui_ImplDX11_CreateDeviceObjects();
+
+    if ( m_pFreeType_Font )
+        m_pFreeType_Font->ResetBuildFont();
 }
 
 void CAndromedaGUI::OnPresent( IDXGISwapChain* pSwapChain )
@@ -508,16 +572,124 @@ auto CAndromedaGUI::SetClassicSteamStyle() -> void
 	style.Colors[ImGuiCol_WindowShadow] = ImVec4( 1.f , 1.f , 0.f , 1.f );
 }
 
+auto CAndromedaGUI::SetNoturnalStyle() -> void
+{
+    auto& style = ImGui::GetStyle();
+    auto& colors = style.Colors;
+
+    style.WindowBorderSize = 1.0f;
+    style.FrameBorderSize = 1.0f;
+    style.WindowMinSize = ImVec2( 75.f , 50.f );
+    style.FramePadding = ImVec2( 10 , 8 );
+    style.ItemSpacing = ImVec2( 8 , 16 );
+    style.ItemInnerSpacing = ImVec2( 6 , 6 );
+    style.Alpha = 1.0f;
+    style.WindowRounding = 12.f;
+    style.FrameRounding = 12.f;
+    style.PopupRounding = 10.f;
+    style.PopupBorderSize = 1.f;
+    style.IndentSpacing = 18.0f;
+    style.ColumnsMinSpacing = 60.0f;
+    style.GrabMinSize = 12.0f;
+    style.GrabRounding = 12.f;
+    style.ScrollbarSize = 12.0f;
+    style.ScrollbarRounding = 12.f;
+
+    style.AntiAliasedFill = true;
+    style.AntiAliasedLines = true;
+    style.AntiAliasedLinesUseTex = true;
+
+    colors[ImGuiCol_Text] = ImVec4( 1.00f , 1.00f , 1.00f , 1.00f );
+    colors[ImGuiCol_TextDisabled] = ImVec4( 0.65f , 0.65f , 0.70f , 1.00f );
+
+    colors[ImGuiCol_WindowBg] = ImVec4( 0.02f , 0.02f , 0.02f , 0.92f );
+    colors[ImGuiCol_ChildBg] = ImVec4( 0.00f , 0.00f , 0.00f , 0.85f );
+    colors[ImGuiCol_PopupBg] = ImVec4( 0.06f , 0.06f , 0.07f , 0.98f );
+
+    colors[ImGuiCol_Border] = ImVec4( 0.133f , 0.152f , 0.180f , 1.00f );
+    colors[ImGuiCol_BorderShadow] = ImVec4( 0.00f , 0.00f , 0.00f , 0.00f );
+
+    colors[ImGuiCol_FrameBg] = ImVec4( 0.14f , 0.14f , 0.16f , 1.00f );
+    colors[ImGuiCol_FrameBgHovered] = ImVec4( 0.22f , 0.18f , 0.32f , 1.00f );
+    colors[ImGuiCol_FrameBgActive] = ImVec4( 0.35f , 0.00f , 0.55f , 1.00f ); // Mantive roxo aqui, mas pode mudar se quiser
+
+    colors[ImGuiCol_TitleBg] = ImVec4( 0.08f , 0.08f , 0.10f , 1.00f );
+    colors[ImGuiCol_TitleBgActive] = ImVec4( 0.20f , 0.12f , 0.36f , 1.00f );
+    colors[ImGuiCol_TitleBgCollapsed] = ImVec4( 0.08f , 0.08f , 0.10f , 1.00f );
+
+    colors[ImGuiCol_MenuBarBg] = ImVec4( 0.08f , 0.08f , 0.10f , 1.00f );
+
+    colors[ImGuiCol_ScrollbarBg] = ImVec4( 0.00f , 0.00f , 0.00f , 0.00f );
+    colors[ImGuiCol_ScrollbarGrab] = ImVec4( 0.22f , 0.22f , 0.26f , 1.00f );
+    colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4( 0.40f , 0.20f , 0.65f , 1.00f );
+    colors[ImGuiCol_ScrollbarGrabActive] = ImVec4( 0.50f , 0.20f , 0.80f , 1.00f );
+
+    colors[ImGuiCol_CheckMark] = ImVec4( 0.70f , 0.40f , 1.00f , 1.00f );
+
+    colors[ImGuiCol_SliderGrab] = ImVec4( 0.60f , 0.30f , 1.00f , 1.00f );
+    colors[ImGuiCol_SliderGrabActive] = ImVec4( 0.80f , 0.50f , 1.00f , 1.00f );
+
+    colors[ImGuiCol_Button] = ImVec4( 0.14f , 0.14f , 0.16f , 1.00f );
+    colors[ImGuiCol_ButtonHovered] = ImVec4( 0.30f , 0.10f , 0.55f , 1.00f );
+    colors[ImGuiCol_ButtonActive] = ImVec4( 0.40f , 0.10f , 0.80f , 1.00f );
+
+    colors[ImGuiCol_Header] = ImVec4( 0.20f , 0.12f , 0.36f , 1.00f );
+    colors[ImGuiCol_HeaderHovered] = ImVec4( 0.40f , 0.20f , 0.65f , 1.00f );
+    colors[ImGuiCol_HeaderActive] = ImVec4( 0.50f , 0.20f , 0.80f , 1.00f );
+
+	colors[ImGuiCol_Separator] = ImVec4( 0.0f , 0.0f , 0.0f , 0.0f );
+    colors[ImGuiCol_SeparatorHovered] = ImVec4( 0.0f , 0.0f , 0.0f , 0.0f );
+    colors[ImGuiCol_SeparatorActive] = ImVec4( 0.0f , 0.0f , 0.0f , 0.0f );
+
+    colors[ImGuiCol_ResizeGrip] = ImVec4( 0.20f , 0.20f , 0.24f , 0.25f );
+    colors[ImGuiCol_ResizeGripHovered] = ImVec4( 0.40f , 0.20f , 0.65f , 0.67f );
+    colors[ImGuiCol_ResizeGripActive] = ImVec4( 0.50f , 0.20f , 0.80f , 0.95f );
+
+    colors[ImGuiCol_Tab] = ImVec4( 0.16f , 0.16f , 0.20f , 1.00f );
+    colors[ImGuiCol_TabHovered] = ImVec4( 0.40f , 0.20f , 0.65f , 1.00f );
+    
+    colors[ImGuiCol_TabActive] = ImVec4( 0.0f , 0.0f , 0.0f , 0.0f ); 
+    
+    colors[ImGuiCol_TabUnfocused] = ImVec4( 0.10f , 0.12f , 0.16f , 0.97f );
+    colors[ImGuiCol_TabUnfocusedActive] = ImVec4( 0.20f , 0.12f , 0.36f , 1.00f );
+
+    colors[ImGuiCol_PlotLines] = ImVec4( 0.80f , 0.80f , 0.80f , 1.00f );
+    colors[ImGuiCol_PlotLinesHovered] = ImVec4( 1.00f , 0.60f , 1.00f , 1.00f );
+    colors[ImGuiCol_PlotHistogram] = ImVec4( 0.70f , 0.40f , 1.00f , 1.00f );
+    colors[ImGuiCol_PlotHistogramHovered] = ImVec4( 1.00f , 0.50f , 1.00f , 1.00f );
+
+    colors[ImGuiCol_TextSelectedBg] = ImVec4( 0.40f , 0.20f , 0.65f , 0.35f );
+    colors[ImGuiCol_DragDropTarget] = ImVec4( 1.00f , 1.00f , 1.00f , 0.90f );
+    colors[ImGuiCol_NavHighlight] = ImVec4( 0.50f , 0.20f , 0.80f , 1.00f );
+    colors[ImGuiCol_NavWindowingHighlight] = ImVec4( 1.00f , 1.00f , 1.00f , 0.70f );
+    colors[ImGuiCol_NavWindowingDimBg] = ImVec4( 0.80f , 0.80f , 0.80f , 0.20f );
+}
+
 auto CAndromedaGUI::UpdateStyle() -> void
 {
-	ImGui::SetCurrentContext( m_pImGuiContext );
+    ImGui::SetCurrentContext( m_pImGuiContext );
+    SetNoturnalStyle();
+}
 
-	if ( Settings::Misc::MenuStyle == EAndromedaGuiStyle_t::ANDROMEDA_GUI_STYLE_INDIGO )
-		SetIndigoStyle();
-	else if ( Settings::Misc::MenuStyle == EAndromedaGuiStyle_t::ANDROMEDA_GUI_STYLE_VERMILLION )
-		SetVermillionStyle();
-	else if ( Settings::Misc::MenuStyle == EAndromedaGuiStyle_t::ANDROMEDA_GUI_STYLE_CLASSIC_STEAM )
-		SetClassicSteamStyle();
+auto CAndromedaGUI::SetExternalFonts( const unsigned char* montserrat_data , size_t montserrat_size , const unsigned char* fa_data , size_t fa_size , float size_px ) -> void
+{
+    m_pMontserratData = montserrat_data;
+    m_uMontserratSize = montserrat_size;
+    m_pFontAwesomeData = fa_data;
+    m_uFontAwesomeSize = fa_size;
+    m_fFontSizePx = size_px;
+    InitFont();
+}
+
+auto CAndromedaGUI::LoadFontsFromBytes() -> void
+{
+    const unsigned char* montserrat = g_Montserrat_Regular;
+    size_t montserrat_size = g_Montserrat_Regular_Size;
+    const unsigned char* fa = g_FontAwesome_Solid;
+    size_t fa_size = g_FontAwesome_Solid_Size;
+
+    if ( (montserrat && montserrat_size) || (fa && fa_size) )
+        SetExternalFonts( montserrat , montserrat_size , fa , fa_size , 18.0f );
 }
 
 bool CAndromedaGUI::FreeTypeBuild::PreNewFrame()
@@ -555,5 +727,5 @@ auto CAndromedaGUI::ClearRenderTargetView() -> void
 
 auto GetAndromedaGUI() -> CAndromedaGUI*
 {
-	return &g_AndromedaGUI;
+    return &g_AndromedaGUI;
 }
