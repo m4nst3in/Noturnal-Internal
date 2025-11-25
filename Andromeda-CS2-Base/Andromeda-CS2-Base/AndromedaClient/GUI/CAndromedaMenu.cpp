@@ -295,6 +295,8 @@ auto CAndromedaMenu::OnRenderMenu() -> void
                 ImGui::Columns( 1 , 0 , false );
                 BeginGroupBox( XorStr( "Group_Misc_2" ) , XorStr( "Misc" ) , ImVec2( 0 , 160 ) );
                 AnimatedCheckbox( XorStr( "Third Person" ) , &Settings::Visual::ThirdPerson );
+                ImGui::Text( XorStr( "Third person distance" ) );
+                ThinSliderFloat( XorStr( "##ThirdPersonDistance" ) , &Settings::Visual::ThirdPersonDistance , 60.f , 250.f , XorStr( "%.0f u" ) );
                 EndGroupBox();
                 ImGui::Columns( 1 );
                 ImGui::EndTabItem();

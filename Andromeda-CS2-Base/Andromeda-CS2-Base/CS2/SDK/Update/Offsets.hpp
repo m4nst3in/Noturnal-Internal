@@ -38,7 +38,7 @@ static constexpr auto g_CCSInventoryManager_GetLocalInventory = 0x3FC60;
 
 static constexpr auto g_CCSPlayerInventory_CGCClientSharedObjectCache = 0x68;
 
-// 44 38 67 ? 0F 84 ? ? ? ? 48 8B 05
+// 41 C6 80 ? ? ? ? ? F3 41 0F 11 80
 static constexpr auto g_CCSGOInput_m_bInThirdPerson = 0x251;
 
 // 44 8B B0 ? ? ? ? 41 8B D6

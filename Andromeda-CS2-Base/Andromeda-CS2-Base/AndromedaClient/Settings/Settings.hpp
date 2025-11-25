@@ -15,6 +15,7 @@ namespace Settings
         inline auto Enemy = true;
         inline auto PlayerBox = true;
         inline auto ThirdPerson = false;
+        inline float ThirdPersonDistance = 110.f;
 
         inline auto PlayerBoxType = 3;
 
