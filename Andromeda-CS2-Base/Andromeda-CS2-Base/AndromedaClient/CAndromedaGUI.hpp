@@ -77,13 +77,15 @@ public:
 	auto GetDeviceContext() -> ID3D11DeviceContext* { return m_pDeviceContext; }
 
 public:
-	auto ClearRenderTargetView() -> void;
+    auto ClearRenderTargetView() -> void;
+    auto GetDepthStencilView() -> ID3D11DepthStencilView* { return m_pDepthStencilView; }
 
 private:
 	ID3D11Device* m_pDevice = nullptr;
 	ID3D11DeviceContext* m_pDeviceContext = nullptr;
 	ID3D11RenderTargetView* m_pRenderTargetView = nullptr;
-	ID3D11RenderTargetView* m_pMainRenderTarget = nullptr;
+    ID3D11RenderTargetView* m_pMainRenderTarget = nullptr;
+    ID3D11DepthStencilView* m_pDepthStencilView = nullptr;
 
 private:
 	ImGuiContext* m_pImGuiContext = nullptr;

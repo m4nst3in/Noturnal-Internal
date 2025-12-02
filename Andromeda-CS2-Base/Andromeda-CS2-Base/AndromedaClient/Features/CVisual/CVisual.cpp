@@ -141,6 +141,111 @@ auto CVisual::OnCreateMove(CCSGOInput* pInput, CUserCmd* pUserCmd) -> void
                 auto* pCCSPlayerController = reinterpret_cast<CCSPlayerController*>( pEntity );
 
                 CachedEntity.m_bVisible = GetCL_VisibleCheck()->IsPlayerControllerVisible( pCCSPlayerController );
+
+                if ( Settings::Visual::ChamsEnabled && Settings::Visual::ChamsGlow )
+                {
+                    auto* pPawn = pCCSPlayerController->m_hPawn().Get<C_CSPlayerPawn>();
+                    if ( pPawn && pCCSPlayerController->m_bPawnIsAlive() )
+                    {
+                        auto visCol = Settings::Visual::ChamsVisibleColor;
+                        auto invisCol = Settings::Visual::ChamsInvisibleColor;
+                        Color cVis( (int)(visCol[0]*255.f) , (int)(visCol[1]*255.f) , (int)(visCol[2]*255.f) , (int)(visCol[3]*255.f) );
+                        Color cInvis( (int)(invisCol[0]*255.f) , (int)(invisCol[1]*255.f) , (int)(invisCol[2]*255.f) , (int)(invisCol[3]*255.f) );
+
+                        pPawn->m_Glow().m_bGlowing() = true;
+                        pPawn->m_Glow().m_glowColorOverride() = CachedEntity.m_bVisible ? cVis : cInvis;
+                    }
+                }
+                else
+                {
+                    auto* pPawn = pCCSPlayerController->m_hPawn().Get<C_CSPlayerPawn>();
+                    if ( pPawn )
+                        pPawn->m_Glow().m_bGlowing() = false;
+                }
+
+                if ( Settings::Visual::ChamsEnabled && Settings::Visual::ChamsOverlay && CachedEntity.m_bDraw )
+                {
+                    bool isEnemy = false;
+                    if ( auto* pLocal = GetCL_Players()->GetLocalPlayerController(); pLocal )
+                        isEnemy = pCCSPlayerController->m_iTeamNum() != pLocal->m_iTeamNum();
+                    bool draw = ( Settings::Visual::Team && !isEnemy ) || ( Settings::Visual::Enemy && isEnemy );
+                    if ( draw )
+                    {
+                        auto visCol = Settings::Visual::ChamsVisibleColor;
+                        auto invisCol = Settings::Visual::ChamsInvisibleColor;
+                        ImColor overlay = CachedEntity.m_bVisible ? ImColor( visCol[0] , visCol[1] , visCol[2] , visCol[3] )
+                                                              : ImColor( invisCol[0] , invisCol[1] , invisCol[2] , invisCol[3] );
+
+                        auto* pPawn = pCCSPlayerController->m_hPawn().Get<C_CSPlayerPawn>();
+                        if ( pPawn )
+                        {
+                            std::vector<ImVec2> pts;
+                            const char* names[] = { "head", "neck_0", "spine_0", "spine_1", "spine_2", "pelvis", "arm_upper_l", "arm_lower_l", "hand_l", "arm_upper_r", "arm_lower_r", "hand_r", "leg_upper_l", "leg_lower_l", "foot_l", "leg_upper_r", "leg_lower_r", "foot_r" };
+                            for ( auto& n : names )
+                            {
+                                int id = pPawn->GetBoneIdByName( n );
+                                if ( id != -1 )
+                                {
+                                    Vector3 p; if ( pPawn->m_pGameSceneNode()->GetBonePosition( id , p ) )
+                                    {
+                                        ImVec2 s; if ( Math::WorldToScreen( p , s ) ) pts.push_back( s );
+                                    }
+                                }
+                            }
+                            if ( pts.size() >= 3 )
+                            {
+                                std::sort( pts.begin() , pts.end() , []( const ImVec2& a , const ImVec2& b ){ if ( a.x == b.x ) return a.y < b.y; return a.x < b.x; } );
+                                pts.erase( std::unique( pts.begin() , pts.end() , []( const ImVec2& a , const ImVec2& b ){ return a.x == b.x && a.y == b.y; } ) , pts.end() );
+                                if ( pts.size() >= 3 )
+                                {
+                                    std::vector<ImVec2> H; H.reserve( pts.size() * 2 );
+                                    auto cross = []( const ImVec2& O , const ImVec2& A , const ImVec2& B )
+                                    { return (A.x - O.x) * (B.y - O.y) - (A.y - O.y) * (B.x - O.x); };
+                                    for ( const auto& p : pts )
+                                    {
+                                        while ( H.size() >= 2 && cross( H[ H.size()-2 ] , H[ H.size()-1 ] , p ) <= 0 ) H.pop_back();
+                                        H.push_back( p );
+                                    }
+                                    size_t t = H.size() + 1;
+                                    for ( auto it = pts.rbegin(); it != pts.rend(); ++it )
+                                    {
+                                        while ( H.size() >= t && cross( H[ H.size()-2 ] , H[ H.size()-1 ] , *it ) <= 0 ) H.pop_back();
+                                        H.push_back( *it );
+                                    }
+                                    if ( !H.empty() ) H.pop_back();
+                                    if ( H.size() >= 3 )
+                                    {
+                                        ImVec2 c( 0 , 0 ); for ( auto& p : H ) { c.x += p.x; c.y += p.y; } c.x /= H.size(); c.y /= H.size();
+                                        for ( size_t i = 0; i < H.size(); ++i )
+                                        {
+                                            const ImVec2& a = H[i];
+                                            const ImVec2& b = H[ ( i + 1 ) % H.size() ];
+                                            GetRenderStackSystem()->DrawTriangleFilled( c , a , b , overlay );
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if ( Settings::Visual::ViewmodelChamsEnabled )
+                {
+                    auto* pPawn = pCCSPlayerController->m_hPawn().Get<C_CSPlayerPawn>();
+                    if ( pPawn )
+                    {
+                        auto vcol = Settings::Visual::ViewmodelChamsColor;
+                        Color cVM( (int)(vcol[0]*255.f) , (int)(vcol[1]*255.f) , (int)(vcol[2]*255.f) , (int)(vcol[3]*255.f) );
+                        for ( auto* vm : pPawn->GetViewModels() )
+                        {
+                            if ( vm )
+                            {
+                                vm->m_Glow().m_bGlowing() = true;
+                                vm->m_Glow().m_glowColorOverride() = cVM;
+                            }
+                        }
+                    }
+                }
             }
             break;
             default:

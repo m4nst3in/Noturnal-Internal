@@ -33,6 +33,9 @@ static constexpr auto g_CEconItemSchema_GetMusicKitDefinitions = 0x4D8;
 // 8B B0 ? ? ? ? 83 FD ? 75 70 83 FE ? 75 6B 48 8B CF E8
 static constexpr auto g_CEconItemDefinition_GetLoadoutSlot = 0x338;
 
+// 48 8B 83 28 01 00 00 4C 8D 25 0D
+static constexpr auto g_CEconItemDefinition_DefaultLoadoutSlot = 0x28;
+
 // Vmt Index -> "67" -> "mov rax, qword ptr ds:[rcx+0x3FC60]"
 static constexpr auto g_CCSInventoryManager_GetLocalInventory = 0x3FC60;
 

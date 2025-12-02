@@ -20,8 +20,18 @@ public:
 	auto OnInit() -> bool;
 
 public:
+
+    /* This pattern is a lea, that loads into r9 the effective address of rcx + 0x10 (lea r9, [rcx+0x10])
+	Probably will have cmp near it (edx?).*/
 	CBasePattern CGameEntitySystem_GetBaseEntity = { VmpStr( "CGameEntitySystem::GetBaseEntity" ) , VmpStr( "4C 8D 49 10 81 FA ?? ?? 00 00 77 ?? 8B CA C1 F9 09" ) , CLIENT_DLL };
+	
+	/* This pattern is a call to the sub_18064DB70 function (CGameEntitySystem?). So we can use it as a Get. 
+	Best way to find it is searching for a function that has xor ecx, ecx followed by a call, with a test and jz to the end of the function.
+	You can also find it near SoundeventPathCornerPairNetworked_t (Not sure)*/
 	CBasePattern CGameEntitySystem_GetLocalPlayerController = { VmpStr( "CGameEntitySystem::GetLocalPlayerController" ) , VmpStr( "E8 ? ? ? ? 48 8B E8 48 85 C0 74 ? 33 DB 39 1D" ) , CLIENT_DLL , 0 , SEARCH_TYPE_CALL };
+	
+	/* String -> "patch_material (?)"
+	This pattern is a call to the sub_180595E30 function (CCSInventoryManager?). So we can use it as a Get. */
 	CBasePattern CCSInventoryManager_Get = { VmpStr( "CCSInventoryManager::Get" ) , VmpStr( "E8 ? ? ? ? 48 8B D8 E8 ? ? ? ? 8B 70" ) , CLIENT_DLL , 0 , SEARCH_TYPE_CALL };
 
 	/* String -> "\nLOADOUT ACTION BATCH #%i\n" */
@@ -117,9 +127,44 @@ public:
 	CBasePattern C_BaseEntity_GetBoneIdByName = { VmpStr( "C_BaseEntity::GetBoneIdByName" ) , VmpStr( "E8 ? ? ? ? 48 8B CF 85 C0 78 ? 44 8B C0" ) , CLIENT_DLL , 0 , SEARCH_TYPE_CALL };
 	CBasePattern ScreenTransform = { VmpStr( "ScreenTransform" ) , VmpStr( "48 89 74 24 ? 57 48 83 EC ? 48 8B 05 ? ? ? ? 48 8B FA" ) , CLIENT_DLL , 0 , SEARCH_TYPE_NONE };
 	CBasePattern CreateSubtickMoveStep = { VmpStr( "CreateSubtickMoveStep" ) , VmpStr( "E8 ? ? ? ? 48 8B D0 49 8D 4E 18 E8 ? ? ? ? 4C 8B C8 4C 8D 43 02 49 8B D1 48 8B CE E8 ? ? ? ? 48 8B D8 48 85 C0 0F 84 ? ? ? ? 48 3B 06 0F 83 ? ? ? ? 0F B7 00 66 C7 45 67 ? ? 66 3B 45 67 74 ? E9 ? ? ? ? 40 80 FF ? 0F 85 ? ? ? ? 41 83 4E 10 ?" ) , CLIENT_DLL , 0 , SEARCH_TYPE_CALL };
+	
+	/* This pattern refers to:
+	sub_180E09A10 proc near
+
+	arg_0= qword ptr  8
+
+	mov     [rsp+arg_0], rbx
+	push    rdi
+	sub     rsp, 20h
+	mov     rbx, rcx
+	mov     rdi, rdx
+	mov     rcx, [rcx+10h]
+	test    rcx, rcx
+	jz      short loc_180E09A30
+
+	mov     eax, [rcx]
+
+	This function will have a call to a function that contains a RTTI Type Descriptor.
+	You have to find String > "DynamicMessage" (goooooogle), and with this find the dq offset, xref to
+	find all functions using it (second dq offset), now you shall have 4 functions. Check all and find
+	the single one that has lea     r8, ??_R0D@8    ; char `RTTI Type Descriptor' or similar (this function
+	will have two references to DynamicMessage). With this now you will access ??_R0D@8 (or similar), and
+	search for all functions that refers to it. You'll look to a function that has a mov rcx, rbp & call 
+	sub_180E23E40 after the lea that refers to ??R0D@8. With this, check xrefs of the function, try to find
+	a function that has +28 (p	sub_180E09A10+28	call    sub_180E09B80), and done! just make the pattern now.
+	*/
 	CBasePattern ProtobufAddToRepeatedPtrElement = { VmpStr( "ProtobufAddToRepeatedPtrElement" ) , VmpStr( "48 89 5C 24 ? 57 48 83 EC ? 48 8B D9 48 8B FA 48 8B 49 ? 48 85 C9 74 ? 8B 01" ) , CLIENT_DLL , 0 , SEARCH_TYPE_NONE };
+	
+	/* This pattern refers to mov     [rsp-8+arg_18], rbx
+	String > "Physics/TraceShape" or "VProf_FindOrCreateCounter (Imprecise)"*/
 	CBasePattern IGamePhysicsQuery_TraceShape = { VmpStr( "IGamePhysicsQuery::TraceShape" ) , VmpStr( "48 89 5C 24 ? 48 89 4C 24 ? 55 57" ) , CLIENT_DLL , 0 , SEARCH_TYPE_NONE };
+	
+	/* This pattern is a call to sub_180824D60 function.
+	String > "AVC_PlantedC4" or "AVC_BaseEntity" (probably the call will be below, on View-A), near a mov edx, [rax] and some movsd. */
 	CBasePattern CCSGOInput_GetViewAngles = { VmpStr( "CCSGOInput::GetViewAngles" ) , VmpStr( "E8 ? ? ? ? EB ? 48 8B 01 48 8D 54 24 ?" ) , CLIENT_DLL , 0 , SEARCH_TYPE_CALL };
+	
+	/* This pattern refers to a test edx, edx, followed by a jnz and a movsxd or movsd. 
+	search for a movsxd like this: movsxd  rax, dword ptr [rcx+0B78h]*/
 	CBasePattern CCSGOInput_SetViewAngles = { VmpStr( "CCSGOInput::SetViewAngles" ) , VmpStr( "85 D2 75 ? 48 63 81" ) , CLIENT_DLL , 0 , SEARCH_TYPE_NONE };
 };
 

@@ -109,11 +109,53 @@ namespace Settings
         inline float GrenadeSimMaxTime = 3.0f;
         inline float GrenadeSimStep = 0.02f;
         inline float GrenadeTrailFadeTime = 1.5f;
+        inline auto ChamsEnabled = false;
+        inline auto ChamsGlow = true;
+        inline auto ChamsIgnoreZ = true;
+        inline float ChamsVisibleColor[4] = { 0.f , 1.f , 0.f , 1.f };
+        inline float ChamsInvisibleColor[4] = { 1.f , 0.f , 0.f , 1.f };
+        inline auto ChamsOverlay = true;
+        inline auto ViewmodelChamsEnabled = false;
+        inline float ViewmodelChamsColor[4] = { 0.0f , 1.0f , 1.0f , 0.6f };
     }
     namespace Misc
     {
         inline auto MenuAlpha = 200;
         inline auto MenuStyle = 0;
+    }
+    
+    namespace Rage
+    {
+        inline auto AimbotEnabled = false;
+        inline auto Silent = false;
+        inline float MaximumFov = 0.0f;
+        inline auto VisualizeAimbot = false;
+        inline auto AntiExploit = false;
+        inline auto TargetDormant = false;
+        inline auto Autofire = false;
+        inline auto HideShot = false;
+        inline auto DoubleTap = false;
+        inline int DefensiveLag = 0;   // None/Low/Medium/High
+        inline int DefensiveFake = 0;  // None/Low/Medium/High
+        inline auto DelayShot = false;
+        inline auto ForceExtraSafety = false;
+        inline auto ForceBodyaim = false;
+        inline auto HeadshotOnly = false;
+        inline auto KnifeBot = false;
+
+        inline float HitChance = 0.0f;       // 0–100
+        inline float PointScale = 0.0f;      // 0–100
+        inline float MinDamage = 0.0f;       // hp
+        inline auto OverrideActive = false;  // gear button visual
+        inline int   Hitboxes = 0;           // None/Head/Chest/Stomach/Arms/Legs
+        inline int   Multipoint = 0;         // None/Low/Medium/High
+
+        inline auto Autostop = false;
+        inline int   SafepointMode = 0;      // None/Smart/Always
+        inline int   Safety = 0;             // None/Low/Medium/High
+        inline int   ExtraSafety = 0;        // None/Low/Medium/High
+        inline int   Bodyaim = 0;            // None/When lethal/Always
+        inline auto IgnoreLimbsOnMoving = false;
     }
     
     namespace Legit

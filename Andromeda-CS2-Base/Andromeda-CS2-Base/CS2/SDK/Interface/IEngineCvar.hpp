@@ -168,4 +168,30 @@ public:
 			GetNextCvarIterator( i );
 		}
 	}
+
+	void UnlockCheatCVars()
+	{
+		uint64_t i = 0;
+		GetFirstCvarIterator( i );
+
+		while ( i != 0xFFFFFFFF )
+		{
+			auto* pConVar = FindVarByIndex( i );
+
+			if ( pConVar )
+			{
+				if ( pConVar->nFlags & FCVAR_CHEAT )
+				{
+					pConVar->nFlags &= ~FCVAR_CHEAT;
+				}
+
+				if ( pConVar->nFlags & FCVAR_HIDDEN )
+				{
+					pConVar->nFlags &= ~FCVAR_HIDDEN;
+				}
+			}
+
+			GetNextCvarIterator( i );
+		}
+	}
 };

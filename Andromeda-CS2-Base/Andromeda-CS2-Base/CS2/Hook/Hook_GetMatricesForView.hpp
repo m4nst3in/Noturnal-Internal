@@ -4,11 +4,14 @@
 
 class VMatrix;
 
-auto Hook_GetMatricesForView( void* rcx , void* view ,
-                              VMatrix* pWorldToView ,
-                              VMatrix* pViewToProjection ,
-                              VMatrix* pWorldToProjection ,
-                              VMatrix* pWorldToPixels ) -> void;
+auto Hook_OverrideView( void* rcx , void* view ,
+                        VMatrix* pWorldToView ,
+                        VMatrix* pViewToProjection ,
+                        VMatrix* pWorldToProjection ,
+                        VMatrix* pWorldToPixels ) -> void;
 
-using GetMatricesForView_t = decltype( &Hook_GetMatricesForView );
-inline GetMatricesForView_t GetMatricesForView_o = nullptr;
+auto GetWorldToViewMatrix() -> const VMatrix*;
+auto GetWorldToProjectionMatrix() -> const VMatrix*;
+
+using OverrideView_t = decltype( &Hook_OverrideView );
+inline OverrideView_t OverrideView_o = nullptr;

@@ -4,7 +4,11 @@
 #include <AndromedaClient/Fonts/FontAwesomeBytes.hpp>
 
 #include <ShlObj_core.h>
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <Windows.h>
+#include <vector>
 
 #include <ImGui/imgui_impl_win32.h>
 #include <ImGui/imgui_impl_dx11.h>
@@ -23,8 +27,22 @@
 
 #include <AndromedaClient/CAndromedaClient.hpp>
 #include <AndromedaClient/Settings/Settings.hpp>
+#include <AndromedaClient/D3D/Hook_DrawIndexed.hpp>
+#include <AndromedaClient/Features/CVisual/CChams3D.hpp>
 
 static CAndromedaGUI g_AndromedaGUI{};
+#if __has_include("../../fatality.win-CS2-master/cs2_internal/src/resources/josefin_sans.h")
+#include "../../fatality.win-CS2-master/cs2_internal/src/resources/josefin_sans.h"
+#define HAS_JOSEFIN 1
+#else
+#define HAS_JOSEFIN 0
+#endif
+#if __has_include("../../fatality.win-CS2-master/cs2_internal/src/resources/josefin_sans_bold.h")
+#include "../../fatality.win-CS2-master/cs2_internal/src/resources/josefin_sans_bold.h"
+#define HAS_JOSEFIN_BOLD 1
+#else
+#define HAS_JOSEFIN_BOLD 0
+#endif
 
 IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler( HWND hwnd , UINT msg , WPARAM wParam , LPARAM lParam );
 
@@ -63,16 +81,20 @@ auto CAndromedaGUI::OnInit( IDXGISwapChain* pSwapChain ) -> void
 	ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
 	ImGui::GetIO().BackendFlags |= ImGuiBackendFlags_HasSetMousePos;
 
-	ImGui_ImplWin32_Init( m_hCS2Window );
+    DEV_LOG( "[gui] OnInit: hwnd=0x%p device=0x%p ctx=0x%p" , m_hCS2Window , m_pDevice , m_pDeviceContext );
+    ImGui_ImplWin32_Init( m_hCS2Window );
     ImGui_ImplDX11_Init( m_pDevice , m_pDeviceContext );
+    InitDrawIndexedHook( m_pDeviceContext );
 
     InitFont();
     LoadFontsFromBytes();
     UpdateStyle();
 
-	m_WndProc_o = (WNDPROC)SetWindowLongPtrA( m_hCS2Window , GWLP_WNDPROC , (LONG_PTR)GUI_WndProc );
+    m_WndProc_o = (WNDPROC)SetWindowLongPtrA( m_hCS2Window , GWLP_WNDPROC , (LONG_PTR)GUI_WndProc );
+    DEV_LOG( "[gui] SetWindowLongPtrA: old_wndproc=0x%p new_wndproc=0x%p" , m_WndProc_o , GUI_WndProc );
 
-	m_bInit = true;
+    m_bInit = true;
+    DEV_LOG( "[gui] OnInit: completed" );
 }
 
 auto CAndromedaGUI::OnDestroy() -> void
@@ -89,7 +111,8 @@ auto CAndromedaGUI::OnDestroy() -> void
 
 	ClearRenderTargetView();
 
-	ImGui_ImplDX11_Shutdown();
+    ShutdownDrawIndexedHook();
+    ImGui_ImplDX11_Shutdown();
 	ImGui_ImplWin32_Shutdown();
 
     ImGui::DestroyContext();
@@ -153,6 +176,7 @@ auto CAndromedaGUI::InitFont() -> void
         tcfg.OversampleH = 2;
         tcfg.OversampleV = 2;
         m_pTitleFont = io.Fonts->AddFontFromMemoryTTF( (void*)m_pMontserratData , (int)m_uMontserratSize , m_fFontSizePx * 1.6f , &tcfg );
+        
     }
     else
     {
@@ -188,7 +212,9 @@ void CAndromedaGUI::OnPresent( IDXGISwapChain* pSwapChain )
 
 void CAndromedaGUI::OnResizeBuffers( IDXGISwapChain* pSwapChain )
 {
-	OnDestroy();
+	DEV_LOG( "[gui] OnResizeBuffers called" );
+	// Only clear the render target view, don't destroy the entire GUI
+	ClearRenderTargetView();
 }
  
 void CAndromedaGUI::OnRender( IDXGISwapChain* pSwapChain )
@@ -198,52 +224,84 @@ void CAndromedaGUI::OnRender( IDXGISwapChain* pSwapChain )
 		ImGui_ImplDX11_InvalidateDeviceObjects();
 		ImGui_ImplDX11_CreateDeviceObjects();
 	}
-	else
-	{
-		if ( !m_pRenderTargetView )
-		{
-			ID3D11Texture2D* pBackBuffer = nullptr;
 
-			pSwapChain->GetBuffer( 0 , IID_PPV_ARGS( &pBackBuffer ) );
+    // Always recreate render target view if it's null or invalid
+    if ( !m_pRenderTargetView )
+    {
+        DEV_LOG( "[gui] Recreating RenderTargetView" );
+        ID3D11Texture2D* pBackBuffer = nullptr;
 
-			D3D11_RENDER_TARGET_VIEW_DESC RenderTargetDesc;
+        if ( SUCCEEDED( pSwapChain->GetBuffer( 0 , IID_PPV_ARGS( &pBackBuffer ) ) ) && pBackBuffer )
+        {
+            D3D11_TEXTURE2D_DESC backBufferDesc;
+            pBackBuffer->GetDesc( &backBufferDesc );
 
-			memset( &RenderTargetDesc , 0 , sizeof( RenderTargetDesc ) );
+            D3D11_RENDER_TARGET_VIEW_DESC RenderTargetDesc = {};
+            RenderTargetDesc.Format = backBufferDesc.Format;
+            RenderTargetDesc.ViewDimension = (backBufferDesc.SampleDesc.Count > 1) ? D3D11_RTV_DIMENSION_TEXTURE2DMS : D3D11_RTV_DIMENSION_TEXTURE2D;
 
-			RenderTargetDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-			RenderTargetDesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2DMS;
+            m_pDevice->CreateRenderTargetView( pBackBuffer , &RenderTargetDesc , &m_pRenderTargetView );
+            pBackBuffer->Release();
+        }
+    }
 
-			if ( pBackBuffer )
-			{
-				m_pDevice->CreateRenderTargetView( pBackBuffer , &RenderTargetDesc , &m_pRenderTargetView );
-				pBackBuffer->Release();
-			}
-		}
+    if ( !m_pRenderTargetView )
+        return;
 
-		ImGui::SetCurrentContext( m_pImGuiContext );
+    ImGui::SetCurrentContext( m_pImGuiContext );
 
-		m_pDeviceContext->OMGetRenderTargets( 1 , &m_pMainRenderTarget , 0 );
-		m_pDeviceContext->OMSetRenderTargets( 1 , &m_pRenderTargetView , 0 );
+    // Hotkey check using GetAsyncKeyState
+    {
+        static bool s_wasPressed = false;
+        
+        // Check if INSERT is currently pressed (high bit set)
+        bool isPressed = (GetAsyncKeyState( VK_INSERT ) & 0x8000) != 0;
+        
+        // Toggle only on rising edge (key just pressed, wasn't pressed before)
+        if ( isPressed && !s_wasPressed )
+        {
+            DEV_LOG( "[gui] VK_INSERT pressed -> toggle (visible=%d)" , m_bVisible ? 0 : 1 );
+            OnReopenGUI();
+        }
+        s_wasPressed = isPressed;
+    }
 
-		ImGui_ImplDX11_NewFrame();
-		ImGui_ImplWin32_NewFrame();
+    m_pDeviceContext->OMGetRenderTargets( 1 , &m_pMainRenderTarget , &m_pDepthStencilView );
+    m_pDeviceContext->OMSetRenderTargets( 1 , &m_pRenderTargetView , nullptr );
 
-		ImGui::NewFrame();
+    ImGui_ImplDX11_NewFrame();
+    ImGui_ImplWin32_NewFrame();
 
-		GetAndromedaClient()->OnRender();
+    ImGui::NewFrame();
 
-		ImGui::EndFrame();
-		ImGui::Render();
+    GetAndromedaClient()->OnRender();
 
-		ImGui_ImplDX11_RenderDrawData( ImGui::GetDrawData() );
+    ImGui::EndFrame();
+    ImGui::Render();
 
-		m_pDeviceContext->OMSetRenderTargets( 1 , &m_pMainRenderTarget , 0 );
-	}
+    ImGui_ImplDX11_RenderDrawData( ImGui::GetDrawData() );
+    if ( GetChams3D()->Init( m_pDevice ) )
+        GetChams3D()->Render( m_pDeviceContext , m_pDepthStencilView );
+    
+    // Restore original render targets
+    m_pDeviceContext->OMSetRenderTargets( 1 , &m_pMainRenderTarget , m_pDepthStencilView );
+    
+    // Release references to avoid leaks
+    if ( m_pMainRenderTarget )
+    {
+        m_pMainRenderTarget->Release();
+        m_pMainRenderTarget = nullptr;
+    }
+    if ( m_pDepthStencilView )
+    {
+        m_pDepthStencilView->Release();
+        m_pDepthStencilView = nullptr;
+    }
 }
 
 auto CAndromedaGUI::OnReopenGUI() -> void
 {
-	m_bVisible = !m_bVisible;
+    m_bVisible = !m_bVisible;
 
 	ImGui::GetIO().MouseDrawCursor = m_bVisible;
 	ShowCursor( !m_bVisible );
@@ -257,8 +315,8 @@ auto CAndromedaGUI::OnReopenGUI() -> void
 
 		ImGui::GetIO().MousePos = m_vecMousePosSave;
 
-		if ( SDK::Interfaces::EngineToClient()->IsInGame() )
-			GetSDL3Functions()->SDL_WarpMouseInWindow_o( nullptr , ImGui::GetIO().MousePos.x , ImGui::GetIO().MousePos.y );
+        if ( SDK::Interfaces::EngineToClient()->IsInGame() )
+            GetSDL3Functions()->SDL_WarpMouseInWindow_o( nullptr , ImGui::GetIO().MousePos.x , ImGui::GetIO().MousePos.y );
 	}
 	else
 	{
@@ -274,16 +332,17 @@ LRESULT WINAPI CAndromedaGUI::GUI_WndProc( HWND hwnd , UINT uMsg , WPARAM wParam
 		return true;
 	}
 
-	if ( GetAndromedaGUI()->m_bInit )
-	{
-		if ( uMsg == WM_KEYUP && wParam == VK_INSERT )
-			GetAndromedaGUI()->OnReopenGUI();
+    if ( GetAndromedaGUI()->m_bInit )
+    {
+        // Block INSERT key from propagating when menu is visible
+        if ( wParam == VK_INSERT && (uMsg == WM_KEYUP || uMsg == WM_KEYDOWN) )
+            return true;
 
 		if ( GetAndromedaGUI()->IsVisible() && ImGui_ImplWin32_WndProcHandler( hwnd , uMsg , wParam , lParam ) == 0 )
 			return true;
 	}
 
-	return CallWindowProcA( GetAndromedaGUI()->m_WndProc_o , hwnd , uMsg , wParam , lParam );
+    return CallWindowProcA( GetAndromedaGUI()->m_WndProc_o , hwnd , uMsg , wParam , lParam );
 }
 
 auto CAndromedaGUI::SetIndigoStyle() -> void
@@ -414,7 +473,7 @@ auto CAndromedaGUI::SetVermillionStyle() -> void
 	style.AntiAliasedLinesUseTex = true;
 
 	colors[ImGuiCol_Text] = ImVec4( 1.00f , 1.00f , 1.00f , 0.75f );
-	colors[ImGuiCol_TextDisabled] = ImVec4( 1.00f , 0.18f , 0.29f , 0.78f );
+	colors[ImGuiCol_TextDisabled] = ImVec4( 0.55f , 0.35f , 0.75f , 0.78f );
 
 	colors[ImGuiCol_WindowBg] = ImVec4( 0.17f , 0.20f , 0.25f , 1.00f );
 	colors[ImGuiCol_ChildBg] = ImVec4( 0.20f , 0.22f , 0.27f , 0.57f );
@@ -424,53 +483,53 @@ auto CAndromedaGUI::SetVermillionStyle() -> void
 	colors[ImGuiCol_BorderShadow] = ImVec4( 0.00f , 0.00f , 0.00f , 0.00f );
 
 	colors[ImGuiCol_FrameBg] = ImVec4( 0.37f , 0.36f , 0.46f , 0.24f );
-	colors[ImGuiCol_FrameBgHovered] = ImVec4( 0.78f , 0.18f , 0.29f , 0.78f );
-	colors[ImGuiCol_FrameBgActive] = ImVec4( 0.78f , 0.18f , 0.29f , 1.00f );
+	colors[ImGuiCol_FrameBgHovered] = ImVec4( 0.55f , 0.35f , 0.75f , 0.78f );
+	colors[ImGuiCol_FrameBgActive] = ImVec4( 0.55f , 0.35f , 0.75f , 1.00f );
 
 	colors[ImGuiCol_TitleBg] = ImVec4( 0.20f , 0.22f , 0.27f , 1.00f );
-	colors[ImGuiCol_TitleBgActive] = ImVec4( 0.78f , 0.18f , 0.29f , 1.00f );
+	colors[ImGuiCol_TitleBgActive] = ImVec4( 0.55f , 0.35f , 0.75f , 1.00f );
 	colors[ImGuiCol_TitleBgCollapsed] = ImVec4( 0.20f , 0.22f , 0.27f , 0.75f );
 
 	colors[ImGuiCol_MenuBarBg] = ImVec4( 0.20f , 0.22f , 0.27f , 0.47f );
 
 	colors[ImGuiCol_ScrollbarBg] = ImVec4( 0.20f , 0.22f , 0.27f , 1.00f );
 	colors[ImGuiCol_ScrollbarGrab] = ImVec4( 0.09f , 0.15f , 0.16f , 1.00f );
-	colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4( 0.78f , 0.18f , 0.29f , 0.78f );
-	colors[ImGuiCol_ScrollbarGrabActive] = ImVec4( 0.78f , 0.18f , 0.29f , 1.00f );
+	colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4( 0.55f , 0.35f , 0.75f , 0.78f );
+	colors[ImGuiCol_ScrollbarGrabActive] = ImVec4( 0.55f , 0.35f , 0.75f , 1.00f );
 
-	colors[ImGuiCol_CheckMark] = ImVec4( 0.71f , 0.18f , 0.29f , 1.00f );
+	colors[ImGuiCol_CheckMark] = ImVec4( 0.55f , 0.35f , 0.75f , 1.00f );
 
-	colors[ImGuiCol_SliderGrab] = ImVec4( 0.78f , 0.18f , 0.29f , 0.37f );
-	colors[ImGuiCol_SliderGrabActive] = ImVec4( 0.92f , 0.18f , 0.29f , 1.00f );
+	colors[ImGuiCol_SliderGrab] = ImVec4( 0.55f , 0.35f , 0.75f , 0.37f );
+	colors[ImGuiCol_SliderGrabActive] = ImVec4( 0.65f , 0.40f , 0.85f , 1.00f );
 
-	colors[ImGuiCol_Button] = ImVec4( 0.65f , 0.18f , 0.29f , 1.00f );
-	colors[ImGuiCol_ButtonHovered] = ImVec4( 0.78f , 0.18f , 0.29f , 0.86f );
-	colors[ImGuiCol_ButtonActive] = ImVec4( 0.78f , 0.18f , 0.29f , 1.00f );
+	colors[ImGuiCol_Button] = ImVec4( 0.45f , 0.30f , 0.65f , 1.00f );
+	colors[ImGuiCol_ButtonHovered] = ImVec4( 0.55f , 0.35f , 0.75f , 0.86f );
+	colors[ImGuiCol_ButtonActive] = ImVec4( 0.55f , 0.35f , 0.75f , 1.00f );
 
-	colors[ImGuiCol_Header] = ImVec4( 0.78f , 0.18f , 0.29f , 0.76f );
-	colors[ImGuiCol_HeaderHovered] = ImVec4( 0.78f , 0.18f , 0.29f , 0.86f );
-	colors[ImGuiCol_HeaderActive] = ImVec4( 0.78f , 0.18f , 0.29f , 1.00f );
+	colors[ImGuiCol_Header] = ImVec4( 0.55f , 0.35f , 0.75f , 0.76f );
+	colors[ImGuiCol_HeaderHovered] = ImVec4( 0.55f , 0.35f , 0.75f , 0.86f );
+	colors[ImGuiCol_HeaderActive] = ImVec4( 0.55f , 0.35f , 0.75f , 1.00f );
 
-	colors[ImGuiCol_Separator] = ImVec4( 0.15f , 0.00f , 0.00f , 0.35f );
-	colors[ImGuiCol_SeparatorHovered] = ImVec4( 0.78f , 0.18f , 0.29f , 0.59f );
-	colors[ImGuiCol_SeparatorActive] = ImVec4( 0.78f , 0.18f , 0.29f , 1.00f );
+	colors[ImGuiCol_Separator] = ImVec4( 0.15f , 0.10f , 0.20f , 0.35f );
+	colors[ImGuiCol_SeparatorHovered] = ImVec4( 0.55f , 0.35f , 0.75f , 0.59f );
+	colors[ImGuiCol_SeparatorActive] = ImVec4( 0.55f , 0.35f , 0.75f , 1.00f );
 
-	colors[ImGuiCol_ResizeGrip] = ImVec4( 0.78f , 0.18f , 0.29f , 0.63f );
-	colors[ImGuiCol_ResizeGripHovered] = ImVec4( 0.78f , 0.18f , 0.29f , 0.78f );
-	colors[ImGuiCol_ResizeGripActive] = ImVec4( 0.78f , 0.18f , 0.29f , 1.00f );
+	colors[ImGuiCol_ResizeGrip] = ImVec4( 0.55f , 0.35f , 0.75f , 0.63f );
+	colors[ImGuiCol_ResizeGripHovered] = ImVec4( 0.55f , 0.35f , 0.75f , 0.78f );
+	colors[ImGuiCol_ResizeGripActive] = ImVec4( 0.55f , 0.35f , 0.75f , 1.00f );
 
-	colors[ImGuiCol_Tab] = ImVec4( 0.78f , 0.18f , 0.29f , 0.76f );
-	colors[ImGuiCol_TabHovered] = ImVec4( 0.78f , 0.18f , 0.29f , 0.86f );
-	colors[ImGuiCol_TabActive] = ImVec4( 0.78f , 0.18f , 0.29f , 1.00f );
+	colors[ImGuiCol_Tab] = ImVec4( 0.55f , 0.35f , 0.75f , 0.76f );
+	colors[ImGuiCol_TabHovered] = ImVec4( 0.55f , 0.35f , 0.75f , 0.86f );
+	colors[ImGuiCol_TabActive] = ImVec4( 0.55f , 0.35f , 0.75f , 1.00f );
 	colors[ImGuiCol_TabUnfocused] = ImVec4( 0.07f , 0.10f , 0.15f , 0.97f );
 	colors[ImGuiCol_TabUnfocusedActive] = ImVec4( 0.14f , 0.26f , 0.42f , 1.00f );
 
 	colors[ImGuiCol_PlotLines] = ImVec4( 0.78f , 0.93f , 0.89f , 0.63f );
-	colors[ImGuiCol_PlotLinesHovered] = ImVec4( 0.92f , 0.18f , 0.29f , 1.00f );
+	colors[ImGuiCol_PlotLinesHovered] = ImVec4( 0.65f , 0.40f , 0.85f , 1.00f );
 	colors[ImGuiCol_PlotHistogram] = ImVec4( 0.86f , 0.93f , 0.89f , 0.63f );
-	colors[ImGuiCol_PlotHistogramHovered] = ImVec4( 0.92f , 0.18f , 0.29f , 1.00f );
+	colors[ImGuiCol_PlotHistogramHovered] = ImVec4( 0.65f , 0.40f , 0.85f , 1.00f );
 
-	colors[ImGuiCol_TextSelectedBg] = ImVec4( 0.92f , 0.18f , 0.29f , 0.43f );
+	colors[ImGuiCol_TextSelectedBg] = ImVec4( 0.55f , 0.35f , 0.75f , 0.43f );
 	colors[ImGuiCol_DragDropTarget] = ImVec4( 1.00f , 1.00f , 0.00f , 0.90f );
 
 	colors[ImGuiCol_NavHighlight] = ImVec4( 0.45f , 0.45f , 0.90f , 0.80f );
@@ -478,7 +537,7 @@ auto CAndromedaGUI::SetVermillionStyle() -> void
 	colors[ImGuiCol_NavWindowingDimBg] = ImVec4( 0.80f , 0.80f , 0.80f , 0.20f );
 
 	colors[ImGuiCol_ModalWindowDimBg] = ImVec4( 0.80f , 0.80f , 0.80f , 0.35f );
-	colors[ImGuiCol_WindowShadow] = ImVec4( 1.f , 0.f , 0.f , 1.f );
+	colors[ImGuiCol_WindowShadow] = ImVec4( 0.5f , 0.3f , 0.7f , 1.f );
 }
 
 auto CAndromedaGUI::SetClassicSteamStyle() -> void
@@ -577,92 +636,128 @@ auto CAndromedaGUI::SetNoturnalStyle() -> void
     auto& style = ImGui::GetStyle();
     auto& colors = style.Colors;
 
-    style.WindowBorderSize = 1.0f;
-    style.FrameBorderSize = 1.0f;
-    style.WindowMinSize = ImVec2( 75.f , 50.f );
-    style.FramePadding = ImVec2( 10 , 8 );
-    style.ItemSpacing = ImVec2( 8 , 16 );
-    style.ItemInnerSpacing = ImVec2( 6 , 6 );
+    // Fatality-inspired spacing and sizing
+    style.WindowBorderSize = 0.0f;
+    style.FrameBorderSize = 0.0f;
+    style.ChildBorderSize = 0.0f;
+    style.PopupBorderSize = 1.0f;
+    style.WindowMinSize = ImVec2( 100.f , 100.f );
+    style.WindowPadding = ImVec2( 12.f , 12.f );
+    style.FramePadding = ImVec2( 8.f , 4.f );
+    style.ItemSpacing = ImVec2( 8.f , 6.f );
+    style.ItemInnerSpacing = ImVec2( 6.f , 4.f );
+    style.CellPadding = ImVec2( 4.f , 4.f );
     style.Alpha = 1.0f;
-    style.WindowRounding = 12.f;
-    style.FrameRounding = 12.f;
-    style.PopupRounding = 10.f;
-    style.PopupBorderSize = 1.f;
-    style.IndentSpacing = 18.0f;
-    style.ColumnsMinSpacing = 60.0f;
-    style.GrabMinSize = 12.0f;
-    style.GrabRounding = 12.f;
-    style.ScrollbarSize = 12.0f;
-    style.ScrollbarRounding = 12.f;
+    style.DisabledAlpha = 0.5f;
+    style.WindowRounding = 6.f;
+    style.ChildRounding = 4.f;
+    style.FrameRounding = 3.f;
+    style.PopupRounding = 4.f;
+    style.TabRounding = 4.f;
+    style.TabBorderSize = 0.f;
+    style.IndentSpacing = 12.0f;
+    style.ColumnsMinSpacing = 8.0f;
+    style.GrabMinSize = 8.0f;
+    style.GrabRounding = 2.f;
+    style.ScrollbarSize = 10.0f;
+    style.ScrollbarRounding = 3.f;
+    style.WindowTitleAlign = ImVec2( 0.5f , 0.5f );
 
     style.AntiAliasedFill = true;
     style.AntiAliasedLines = true;
     style.AntiAliasedLinesUseTex = true;
 
-    colors[ImGuiCol_Text] = ImVec4( 1.00f , 1.00f , 1.00f , 1.00f );
-    colors[ImGuiCol_TextDisabled] = ImVec4( 0.65f , 0.65f , 0.70f , 1.00f );
+    // Purple color palette
+    // bg_bottom(17,15,35), bg_block(25,21,52), outline(60,53,93)
+    const float accent_r = 140.f/255.f;
+    const float accent_g = 90.f/255.f;
+    const float accent_b = 190.f/255.f;
 
-    colors[ImGuiCol_WindowBg] = ImVec4( 0.02f , 0.02f , 0.02f , 0.92f );
-    colors[ImGuiCol_ChildBg] = ImVec4( 0.00f , 0.00f , 0.00f , 0.85f );
-    colors[ImGuiCol_PopupBg] = ImVec4( 0.06f , 0.06f , 0.07f , 0.98f );
+    colors[ImGuiCol_Text] = ImVec4( 0.96f , 0.96f , 0.96f , 1.00f );
+    colors[ImGuiCol_TextDisabled] = ImVec4( 0.43f , 0.39f , 0.59f , 1.00f );
 
-    colors[ImGuiCol_Border] = ImVec4( 0.133f , 0.152f , 0.180f , 1.00f );
+    // Window backgrounds - deep dark purple tones
+    colors[ImGuiCol_WindowBg] = ImVec4( 17.f/255.f , 15.f/255.f , 35.f/255.f , 0.98f );
+    colors[ImGuiCol_ChildBg] = ImVec4( 25.f/255.f , 21.f/255.f , 52.f/255.f , 1.00f );
+    colors[ImGuiCol_PopupBg] = ImVec4( 25.f/255.f , 21.f/255.f , 52.f/255.f , 0.98f );
+
+    // Borders - subtle purple outline
+    colors[ImGuiCol_Border] = ImVec4( 60.f/255.f , 53.f/255.f , 93.f/255.f , 0.60f );
     colors[ImGuiCol_BorderShadow] = ImVec4( 0.00f , 0.00f , 0.00f , 0.00f );
 
-    colors[ImGuiCol_FrameBg] = ImVec4( 0.14f , 0.14f , 0.16f , 1.00f );
-    colors[ImGuiCol_FrameBgHovered] = ImVec4( 0.22f , 0.18f , 0.32f , 1.00f );
-    colors[ImGuiCol_FrameBgActive] = ImVec4( 0.35f , 0.00f , 0.55f , 1.00f ); // Mantive roxo aqui, mas pode mudar se quiser
+    // Frame backgrounds - block overlay colors
+    colors[ImGuiCol_FrameBg] = ImVec4( 33.f/255.f , 27.f/255.f , 69.f/255.f , 1.00f );
+    colors[ImGuiCol_FrameBgHovered] = ImVec4( 45.f/255.f , 38.f/255.f , 85.f/255.f , 1.00f );
+    colors[ImGuiCol_FrameBgActive] = ImVec4( accent_r , accent_g , accent_b , 0.45f );
 
-    colors[ImGuiCol_TitleBg] = ImVec4( 0.08f , 0.08f , 0.10f , 1.00f );
-    colors[ImGuiCol_TitleBgActive] = ImVec4( 0.20f , 0.12f , 0.36f , 1.00f );
-    colors[ImGuiCol_TitleBgCollapsed] = ImVec4( 0.08f , 0.08f , 0.10f , 1.00f );
+    // Title bars
+    colors[ImGuiCol_TitleBg] = ImVec4( 17.f/255.f , 15.f/255.f , 35.f/255.f , 1.00f );
+    colors[ImGuiCol_TitleBgActive] = ImVec4( 25.f/255.f , 21.f/255.f , 52.f/255.f , 1.00f );
+    colors[ImGuiCol_TitleBgCollapsed] = ImVec4( 17.f/255.f , 15.f/255.f , 35.f/255.f , 0.75f );
 
-    colors[ImGuiCol_MenuBarBg] = ImVec4( 0.08f , 0.08f , 0.10f , 1.00f );
+    colors[ImGuiCol_MenuBarBg] = ImVec4( 17.f/255.f , 15.f/255.f , 35.f/255.f , 1.00f );
 
-    colors[ImGuiCol_ScrollbarBg] = ImVec4( 0.00f , 0.00f , 0.00f , 0.00f );
-    colors[ImGuiCol_ScrollbarGrab] = ImVec4( 0.22f , 0.22f , 0.26f , 1.00f );
-    colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4( 0.40f , 0.20f , 0.65f , 1.00f );
-    colors[ImGuiCol_ScrollbarGrabActive] = ImVec4( 0.50f , 0.20f , 0.80f , 1.00f );
+    // Scrollbar
+    colors[ImGuiCol_ScrollbarBg] = ImVec4( 17.f/255.f , 15.f/255.f , 35.f/255.f , 0.50f );
+    colors[ImGuiCol_ScrollbarGrab] = ImVec4( 60.f/255.f , 53.f/255.f , 93.f/255.f , 1.00f );
+    colors[ImGuiCol_ScrollbarGrabHovered] = ImVec4( accent_r , accent_g , accent_b , 0.70f );
+    colors[ImGuiCol_ScrollbarGrabActive] = ImVec4( accent_r , accent_g , accent_b , 1.00f );
 
-    colors[ImGuiCol_CheckMark] = ImVec4( 0.70f , 0.40f , 1.00f , 1.00f );
+    // Checkmark - TRANSPARENT (we draw our own custom checkmark)
+    colors[ImGuiCol_CheckMark] = ImVec4( 0.0f , 0.0f , 0.0f , 0.0f );
 
-    colors[ImGuiCol_SliderGrab] = ImVec4( 0.60f , 0.30f , 1.00f , 1.00f );
-    colors[ImGuiCol_SliderGrabActive] = ImVec4( 0.80f , 0.50f , 1.00f , 1.00f );
+    // Sliders
+    colors[ImGuiCol_SliderGrab] = ImVec4( accent_r , accent_g , accent_b , 0.80f );
+    colors[ImGuiCol_SliderGrabActive] = ImVec4( accent_r , accent_g , accent_b , 1.00f );
 
-    colors[ImGuiCol_Button] = ImVec4( 0.14f , 0.14f , 0.16f , 1.00f );
-    colors[ImGuiCol_ButtonHovered] = ImVec4( 0.30f , 0.10f , 0.55f , 1.00f );
-    colors[ImGuiCol_ButtonActive] = ImVec4( 0.40f , 0.10f , 0.80f , 1.00f );
+    // Buttons
+    colors[ImGuiCol_Button] = ImVec4( 33.f/255.f , 27.f/255.f , 69.f/255.f , 1.00f );
+    colors[ImGuiCol_ButtonHovered] = ImVec4( accent_r , accent_g , accent_b , 0.65f );
+    colors[ImGuiCol_ButtonActive] = ImVec4( accent_r , accent_g , accent_b , 1.00f );
 
-    colors[ImGuiCol_Header] = ImVec4( 0.20f , 0.12f , 0.36f , 1.00f );
-    colors[ImGuiCol_HeaderHovered] = ImVec4( 0.40f , 0.20f , 0.65f , 1.00f );
-    colors[ImGuiCol_HeaderActive] = ImVec4( 0.50f , 0.20f , 0.80f , 1.00f );
+    // Headers (collapsing headers, tree nodes)
+    colors[ImGuiCol_Header] = ImVec4( 33.f/255.f , 27.f/255.f , 69.f/255.f , 1.00f );
+    colors[ImGuiCol_HeaderHovered] = ImVec4( accent_r , accent_g , accent_b , 0.50f );
+    colors[ImGuiCol_HeaderActive] = ImVec4( accent_r , accent_g , accent_b , 0.80f );
 
-	colors[ImGuiCol_Separator] = ImVec4( 0.0f , 0.0f , 0.0f , 0.0f );
-    colors[ImGuiCol_SeparatorHovered] = ImVec4( 0.0f , 0.0f , 0.0f , 0.0f );
-    colors[ImGuiCol_SeparatorActive] = ImVec4( 0.0f , 0.0f , 0.0f , 0.0f );
+    // Separators - invisible
+    colors[ImGuiCol_Separator] = ImVec4( 60.f/255.f , 53.f/255.f , 93.f/255.f , 0.30f );
+    colors[ImGuiCol_SeparatorHovered] = ImVec4( accent_r , accent_g , accent_b , 0.50f );
+    colors[ImGuiCol_SeparatorActive] = ImVec4( accent_r , accent_g , accent_b , 1.00f );
 
-    colors[ImGuiCol_ResizeGrip] = ImVec4( 0.20f , 0.20f , 0.24f , 0.25f );
-    colors[ImGuiCol_ResizeGripHovered] = ImVec4( 0.40f , 0.20f , 0.65f , 0.67f );
-    colors[ImGuiCol_ResizeGripActive] = ImVec4( 0.50f , 0.20f , 0.80f , 0.95f );
+    // Resize grip
+    colors[ImGuiCol_ResizeGrip] = ImVec4( 60.f/255.f , 53.f/255.f , 93.f/255.f , 0.25f );
+    colors[ImGuiCol_ResizeGripHovered] = ImVec4( accent_r , accent_g , accent_b , 0.50f );
+    colors[ImGuiCol_ResizeGripActive] = ImVec4( accent_r , accent_g , accent_b , 0.95f );
 
-    colors[ImGuiCol_Tab] = ImVec4( 0.16f , 0.16f , 0.20f , 1.00f );
-    colors[ImGuiCol_TabHovered] = ImVec4( 0.40f , 0.20f , 0.65f , 1.00f );
-    
-    colors[ImGuiCol_TabActive] = ImVec4( 0.0f , 0.0f , 0.0f , 0.0f ); 
-    
-    colors[ImGuiCol_TabUnfocused] = ImVec4( 0.10f , 0.12f , 0.16f , 0.97f );
-    colors[ImGuiCol_TabUnfocusedActive] = ImVec4( 0.20f , 0.12f , 0.36f , 1.00f );
+    // Tabs - transparent active tab for underline effect
+    colors[ImGuiCol_Tab] = ImVec4( 33.f/255.f , 27.f/255.f , 69.f/255.f , 0.86f );
+    colors[ImGuiCol_TabHovered] = ImVec4( accent_r , accent_g , accent_b , 0.50f );
+    colors[ImGuiCol_TabSelected] = ImVec4( 0.0f , 0.0f , 0.0f , 0.0f );
+    colors[ImGuiCol_TabActive] = ImVec4( 0.0f , 0.0f , 0.0f , 0.0f );
+    colors[ImGuiCol_TabUnfocused] = ImVec4( 17.f/255.f , 15.f/255.f , 35.f/255.f , 0.97f );
+    colors[ImGuiCol_TabUnfocusedActive] = ImVec4( 25.f/255.f , 21.f/255.f , 52.f/255.f , 1.00f );
 
+    // Plots
     colors[ImGuiCol_PlotLines] = ImVec4( 0.80f , 0.80f , 0.80f , 1.00f );
-    colors[ImGuiCol_PlotLinesHovered] = ImVec4( 1.00f , 0.60f , 1.00f , 1.00f );
-    colors[ImGuiCol_PlotHistogram] = ImVec4( 0.70f , 0.40f , 1.00f , 1.00f );
-    colors[ImGuiCol_PlotHistogramHovered] = ImVec4( 1.00f , 0.50f , 1.00f , 1.00f );
+    colors[ImGuiCol_PlotLinesHovered] = ImVec4( accent_r , accent_g , accent_b , 1.00f );
+    colors[ImGuiCol_PlotHistogram] = ImVec4( accent_r , accent_g , accent_b , 0.70f );
+    colors[ImGuiCol_PlotHistogramHovered] = ImVec4( accent_r , accent_g , accent_b , 1.00f );
 
-    colors[ImGuiCol_TextSelectedBg] = ImVec4( 0.40f , 0.20f , 0.65f , 0.35f );
-    colors[ImGuiCol_DragDropTarget] = ImVec4( 1.00f , 1.00f , 1.00f , 0.90f );
-    colors[ImGuiCol_NavHighlight] = ImVec4( 0.50f , 0.20f , 0.80f , 1.00f );
+    // Tables
+    colors[ImGuiCol_TableHeaderBg] = ImVec4( 25.f/255.f , 21.f/255.f , 52.f/255.f , 1.00f );
+    colors[ImGuiCol_TableBorderStrong] = ImVec4( 60.f/255.f , 53.f/255.f , 93.f/255.f , 1.00f );
+    colors[ImGuiCol_TableBorderLight] = ImVec4( 60.f/255.f , 53.f/255.f , 93.f/255.f , 0.50f );
+    colors[ImGuiCol_TableRowBg] = ImVec4( 0.00f , 0.00f , 0.00f , 0.00f );
+    colors[ImGuiCol_TableRowBgAlt] = ImVec4( 1.00f , 1.00f , 1.00f , 0.03f );
+
+    // Misc
+    colors[ImGuiCol_TextSelectedBg] = ImVec4( accent_r , accent_g , accent_b , 0.35f );
+    colors[ImGuiCol_DragDropTarget] = ImVec4( accent_r , accent_g , accent_b , 0.90f );
+    colors[ImGuiCol_NavHighlight] = ImVec4( accent_r , accent_g , accent_b , 1.00f );
     colors[ImGuiCol_NavWindowingHighlight] = ImVec4( 1.00f , 1.00f , 1.00f , 0.70f );
     colors[ImGuiCol_NavWindowingDimBg] = ImVec4( 0.80f , 0.80f , 0.80f , 0.20f );
+    colors[ImGuiCol_ModalWindowDimBg] = ImVec4( 0.00f , 0.00f , 0.00f , 0.60f );
 }
 
 auto CAndromedaGUI::UpdateStyle() -> void
@@ -687,6 +782,11 @@ auto CAndromedaGUI::LoadFontsFromBytes() -> void
     size_t montserrat_size = g_Montserrat_Regular_Size;
     const unsigned char* fa = g_FontAwesome_Solid;
     size_t fa_size = g_FontAwesome_Solid_Size;
+
+#if HAS_JOSEFIN
+    montserrat = josefin_sans.data();
+    montserrat_size = josefin_sans.size();
+#endif
 
     if ( (montserrat && montserrat_size) || (fa && fa_size) )
         SetExternalFonts( montserrat , montserrat_size , fa , fa_size , 18.0f );

@@ -2,6 +2,7 @@
 #include "DllLauncher.hpp"
 
 #include <Psapi.h>
+#include <DbgHelp.h>
 
 static CCrashLog g_CCrashLog{};
 
@@ -66,6 +67,8 @@ auto WINAPI CCrashLog::VectoredExceptionHandler( PEXCEPTION_POINTERS pExceptionI
 
         if ( hProcess )
         {
+            SymSetOptions( SYMOPT_UNDNAME | SYMOPT_LOAD_LINES );
+            SymInitialize( hProcess , nullptr , TRUE );
             char RaxModuleName[MAX_PATH] = { 0 };
             
             if ( GetMappedFileNameA( hProcess , (PVOID)pExceptionInfo->ContextRecord->Rcx , RaxModuleName , MAX_PATH ) > 0 )
@@ -119,6 +122,23 @@ auto WINAPI CCrashLog::VectoredExceptionHandler( PEXCEPTION_POINTERS pExceptionI
                 GetCrashLog()->WriteCrashLogFile( XorStr( "Exception Handle: %p\n" ) , ModuleHinstance );
                 GetCrashLog()->WriteCrashLogFile( XorStr( "Exception Module: %s\n" ) , CrashModuleName.c_str() );
                 GetCrashLog()->WriteCrashLogFile( XorStr( "Exception Offset: %X\n" ) , ModuleCrashOffset );
+
+                char symBuff[ sizeof( SYMBOL_INFO ) + MAX_SYM_NAME ] = { 0 };
+                PSYMBOL_INFO pSym = reinterpret_cast<PSYMBOL_INFO>( symBuff );
+                pSym->SizeOfStruct = sizeof( SYMBOL_INFO );
+                pSym->MaxNameLen = MAX_SYM_NAME;
+                DWORD64 disp64 = 0;
+                IMAGEHLP_LINE64 line = { 0 };
+                line.SizeOfStruct = sizeof( line );
+                DWORD dispLine = 0;
+                if ( SymFromAddr( hProcess , (DWORD64)ExceptionAddress , &disp64 , pSym ) )
+                {
+                    GetCrashLog()->WriteCrashLogFile( XorStr( "Exception Symbol: %s+0x%llX\n" ) , pSym->Name , disp64 );
+                }
+                if ( SymGetLineFromAddr64( hProcess , (DWORD64)ExceptionAddress , &dispLine , &line ) )
+                {
+                    GetCrashLog()->WriteCrashLogFile( XorStr( "Exception File: %s:%u\n" ) , line.FileName , line.LineNumber );
+                }
             }
 
             GetCrashLog()->WriteCrashLogFile( XorStr( "Exception Code: %X\n" ) , ExceptionCode );
@@ -183,7 +203,24 @@ auto WINAPI CCrashLog::VectoredExceptionHandler( PEXCEPTION_POINTERS pExceptionI
                             const auto ModuleHinstance = GetModuleHandleA( ModuleName.c_str() );
                             const auto ModuleCrashOffset = (uintptr_t)pStack - (uintptr_t)ModuleHinstance;
 
-                            GetCrashLog()->WriteCrashLogFile( XorStr( "CallStack (%i): %p (%s) -> %X\n" ) , i , pStack , ModuleName.c_str() , (uint32_t)ModuleCrashOffset );
+                            char symBuff2[ sizeof( SYMBOL_INFO ) + MAX_SYM_NAME ] = { 0 };
+                            PSYMBOL_INFO pSym2 = reinterpret_cast<PSYMBOL_INFO>( symBuff2 );
+                            pSym2->SizeOfStruct = sizeof( SYMBOL_INFO );
+                            pSym2->MaxNameLen = MAX_SYM_NAME;
+                            DWORD64 disp642 = 0;
+                            IMAGEHLP_LINE64 line2 = { 0 };
+                            line2.SizeOfStruct = sizeof( line2 );
+                            DWORD dispLine2 = 0;
+                            const char* symNameOut = nullptr;
+                            if ( SymFromAddr( hProcess , (DWORD64)pStack , &disp642 , pSym2 ) ) symNameOut = pSym2->Name;
+                            const char* fileOut = nullptr; DWORD lineOut = 0;
+                            if ( SymGetLineFromAddr64( hProcess , (DWORD64)pStack , &dispLine2 , &line2 ) ) { fileOut = line2.FileName; lineOut = line2.LineNumber; }
+                            if ( symNameOut && fileOut )
+                                GetCrashLog()->WriteCrashLogFile( XorStr( "CallStack (%i): %p (%s) -> %X | %s+0x%llX | %s:%u\n" ) , i , pStack , ModuleName.c_str() , (uint32_t)ModuleCrashOffset , symNameOut , disp642 , fileOut , lineOut );
+                            else if ( symNameOut )
+                                GetCrashLog()->WriteCrashLogFile( XorStr( "CallStack (%i): %p (%s) -> %X | %s+0x%llX\n" ) , i , pStack , ModuleName.c_str() , (uint32_t)ModuleCrashOffset , symNameOut , disp642 );
+                            else
+                                GetCrashLog()->WriteCrashLogFile( XorStr( "CallStack (%i): %p (%s) -> %X\n" ) , i , pStack , ModuleName.c_str() , (uint32_t)ModuleCrashOffset );
                         }
                     }
                 }
@@ -218,7 +255,24 @@ auto WINAPI CCrashLog::VectoredExceptionHandler( PEXCEPTION_POINTERS pExceptionI
                             const auto ModuleHinstance = GetModuleHandleA( ModuleName.c_str() );
                             const auto ModuleCrashOffset = (uintptr_t)RSP_Data - (uintptr_t)ModuleHinstance;
 
-                            GetCrashLog()->WriteCrashLogFile( XorStr( "Stack (%i): %p (%s) -> %X\n" ) , i , (PVOID)RSP_Data , ModuleName.c_str() , (uint32_t)ModuleCrashOffset );
+                            char symBuff3[ sizeof( SYMBOL_INFO ) + MAX_SYM_NAME ] = { 0 };
+                            PSYMBOL_INFO pSym3 = reinterpret_cast<PSYMBOL_INFO>( symBuff3 );
+                            pSym3->SizeOfStruct = sizeof( SYMBOL_INFO );
+                            pSym3->MaxNameLen = MAX_SYM_NAME;
+                            DWORD64 disp643 = 0;
+                            IMAGEHLP_LINE64 line3 = { 0 };
+                            line3.SizeOfStruct = sizeof( line3 );
+                            DWORD dispLine3 = 0;
+                            const char* symNameOut3 = nullptr;
+                            if ( SymFromAddr( hProcess , (DWORD64)RSP_Data , &disp643 , pSym3 ) ) symNameOut3 = pSym3->Name;
+                            const char* fileOut3 = nullptr; DWORD lineOut3 = 0;
+                            if ( SymGetLineFromAddr64( hProcess , (DWORD64)RSP_Data , &dispLine3 , &line3 ) ) { fileOut3 = line3.FileName; lineOut3 = line3.LineNumber; }
+                            if ( symNameOut3 && fileOut3 )
+                                GetCrashLog()->WriteCrashLogFile( XorStr( "Stack (%i): %p (%s) -> %X | %s+0x%llX | %s:%u\n" ) , i , (PVOID)RSP_Data , ModuleName.c_str() , (uint32_t)ModuleCrashOffset , symNameOut3 , disp643 , fileOut3 , lineOut3 );
+                            else if ( symNameOut3 )
+                                GetCrashLog()->WriteCrashLogFile( XorStr( "Stack (%i): %p (%s) -> %X | %s+0x%llX\n" ) , i , (PVOID)RSP_Data , ModuleName.c_str() , (uint32_t)ModuleCrashOffset , symNameOut3 , disp643 );
+                            else
+                                GetCrashLog()->WriteCrashLogFile( XorStr( "Stack (%i): %p (%s) -> %X\n" ) , i , (PVOID)RSP_Data , ModuleName.c_str() , (uint32_t)ModuleCrashOffset );
                         }
                         else
                         {
@@ -232,6 +286,7 @@ auto WINAPI CCrashLog::VectoredExceptionHandler( PEXCEPTION_POINTERS pExceptionI
                 }
             }
 
+            SymCleanup( hProcess );
             CloseHandle( hProcess );
         }
     }

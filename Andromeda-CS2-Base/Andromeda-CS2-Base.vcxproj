@@ -85,6 +85,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
+      <AdditionalDependencies>d3dcompiler.lib;Dbghelp.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -100,6 +101,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
+      <AdditionalDependencies>Dbghelp.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -113,6 +115,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
+      <AdditionalDependencies>Dbghelp.lib;winhttp.lib;windowscodecs.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -133,6 +136,7 @@
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
+      <AdditionalDependencies>Dbghelp.lib;winhttp.lib;windowscodecs.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -148,7 +152,13 @@
     <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Fonts\CFont.cpp" />
     <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Fonts\CFontManager.cpp" />
     <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\GUI\CAndromedaMenu.cpp" />
+    <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Features\CInventory\CSkinDatabase.cpp" />
+    <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Features\CInventory\InventoryChanger.cpp" />
+    <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Features\CInventory\SkinApiClient.cpp" />
+    <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Features\CInventory\SkinImageCache.cpp" />
     <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Render\CRender.cpp" />
+    <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\D3D\Hook_DrawIndexed.cpp" />
+    <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Features\CVisual\CChams3D.cpp" />
     <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Render\CRenderStackSystem.cpp" />
     <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Fonts\MontserratBytes.cpp" />
     <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Fonts\FontAwesomeBytes.cpp" />
@@ -180,6 +190,7 @@
     <ClCompile Include="Andromeda-CS2-Base\CS2\Hook\Hook_OnClientOutput.cpp" />
     <ClCompile Include="Andromeda-CS2-Base\CS2\Hook\Hook_OnRemoveEntity.cpp" />
     <ClCompile Include="Andromeda-CS2-Base\CS2\Hook\Hook_ParseMessage.cpp" />
+    <ClCompile Include="Andromeda-CS2-Base\CS2\Hook\Hook_DrawObject.cpp" Condition="Exists('$(MSBuildProjectDirectory)\Andromeda-CS2-Base\CS2\Hook\Hook_DrawObject.cpp')" />
     <ClCompile Include="Andromeda-CS2-Base\CS2\Hook\Hook_Present.cpp" />
     <ClCompile Include="Andromeda-CS2-Base\CS2\Hook\Hook_ResizeBuffers.cpp" />
     <ClCompile Include="Andromeda-CS2-Base\CS2\Hook\Hook_SOCacheSubscribed.cpp" />
@@ -266,6 +277,8 @@
     <ClInclude Include="Andromeda-CS2-Base\AndromedaClient\GUI\CAndromedaMenu.hpp" />
     <ClInclude Include="Andromeda-CS2-Base\AndromedaClient\Render\CRender.hpp" />
     <ClInclude Include="Andromeda-CS2-Base\AndromedaClient\Render\CRenderStackSystem.hpp" />
+    <ClInclude Include="Andromeda-CS2-Base\AndromedaClient\D3D\Hook_DrawIndexed.hpp" />
+    <ClInclude Include="Andromeda-CS2-Base\AndromedaClient\Features\CVisual\CChams3D.hpp" />
     <ClInclude Include="Andromeda-CS2-Base\AndromedaClient\Fonts\MontserratBytes.hpp" />
     <ClInclude Include="Andromeda-CS2-Base\AndromedaClient\Fonts\FontAwesomeBytes.hpp" />
     <ClInclude Include="Andromeda-CS2-Base\AndromedaClient\Settings\CSettingsJson.hpp" />
@@ -360,11 +373,13 @@
     <ClInclude Include="Andromeda-CS2-Base\CS2\Hook\Hook_OnClientOutput.hpp" />
     <ClInclude Include="Andromeda-CS2-Base\CS2\Hook\Hook_OnRemoveEntity.hpp" />
     <ClInclude Include="Andromeda-CS2-Base\CS2\Hook\Hook_ParseMessage.hpp" />
+    <ClInclude Include="Andromeda-CS2-Base\CS2\Hook\Hook_DrawObject.hpp" />
     <ClInclude Include="Andromeda-CS2-Base\CS2\Hook\Hook_Present.hpp" />
     <ClInclude Include="Andromeda-CS2-Base\CS2\Hook\Hook_ResizeBuffers.hpp" />
     <ClInclude Include="Andromeda-CS2-Base\CS2\Hook\Hook_SOCacheSubscribed.hpp" />
     <ClInclude Include="Andromeda-CS2-Base\CS2\Hook\Hook_UpdateInPVS.hpp" />
     <ClInclude Include="Andromeda-CS2-Base\CS2\Protobuf\base_gcmessages.pb.h" />
+    <ClInclude Include="Andromeda-CS2-Base\GameClient\DevTests\OffsetPatternTester.hpp" />
     <ClInclude Include="Andromeda-CS2-Base\CS2\Protobuf\clientmessages.pb.h" />
     <ClInclude Include="Andromeda-CS2-Base\CS2\Protobuf\connectionless_netmessages.pb.h" />
     <ClInclude Include="Andromeda-CS2-Base\CS2\Protobuf\cstrike15_gcmessages.pb.h" />

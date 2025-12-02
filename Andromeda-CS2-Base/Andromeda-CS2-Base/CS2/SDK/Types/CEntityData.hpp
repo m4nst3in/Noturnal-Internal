@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Common/Common.hpp>
-
+	
 #include "Color.hpp"
 
 #include "CBaseTypes.hpp"
@@ -22,10 +22,11 @@
 
 namespace index
 {
-	namespace CEntityInstance
-	{
-		constexpr auto PostDataUpdate = 7;
-	}
+    namespace CEntityInstance
+    {
+        constexpr auto OnDataChanged = 5;
+        constexpr auto PostDataUpdate = 7;
+    }
 }
 
 class C_BaseEntity;
@@ -118,22 +119,29 @@ public:
 class CEntityInstance : public IHandleEntity
 {
 public:
-	auto GetSchemaClassBinding() -> CSchemaClassBinding*
-	{
-		CSchemaClassBinding* pBinding = nullptr;
+    auto GetSchemaClassBinding() -> CSchemaClassBinding*
+    {
+        CSchemaClassBinding* pBinding = nullptr;
 
-		VirtualFn( void )( CEntityInstance* , CSchemaClassBinding** );
-		vget< Fn >( this , index::CSchemaSystem::SchemaClassInfo )( this , &pBinding );
+        VirtualFn( void )( CEntityInstance* , CSchemaClassBinding** );
+        vget< Fn >( this , index::CSchemaSystem::SchemaClassInfo )( this , &pBinding );
 
-		return pBinding;
-	}
+        return pBinding;
+    }
 
 public:
-	auto PostDataUpdate() -> void
-	{
-		VirtualFn( void )( CEntityInstance* , int UpdateType );
-		return vget< Fn >( this , index::CEntityInstance::PostDataUpdate )( this , 1 );
-	}
+    auto OnDataChanged( int UpdateType ) -> void
+    {
+        VirtualFn( void )( CEntityInstance* , int UpdateType );
+        return vget< Fn >( this , index::CEntityInstance::OnDataChanged )( this , UpdateType );
+    }
+
+public:
+    auto PostDataUpdate() -> void
+    {
+        VirtualFn( void )( CEntityInstance* , int UpdateType );
+        return vget< Fn >( this , index::CEntityInstance::PostDataUpdate )( this , 1 );
+    }
 
 public:
 	SCHEMA_OFFSET( "CEntityInstance" , "m_pEntity" , pEntityIdentity , CEntityIdentity* );

@@ -21,6 +21,12 @@
 #include <CS2/Hook/Hook_IsRelativeMouseMode.hpp>
 #include <CS2/Hook/Hook_UpdateInPVS.hpp>
 #include <CS2/Hook/Hook_AntiTamper.hpp>
+#if __has_include("CS2/Hook/Hook_DrawObject.hpp")
+#include <CS2/Hook/Hook_DrawObject.hpp>
+#define HAS_DRAW_OBJECT 1
+#else
+#define HAS_DRAW_OBJECT 0
+#endif
 
 static CHook_Loader g_CHook_Loader{};
 
@@ -64,7 +70,7 @@ auto CHook_Loader::InstallSecondHook() -> bool
 		{ { XorStr( "Hook::OnAddEntity" ) , XorStr( "48 89 74 24 10 57 48 83 EC 20 41 B9 FF 7F 00 00 41 8B C0 41 23 C1 48 8B F2 41 83 F8 FF 48 8B F9 44 0F 45 C8 41 81 F9 00 40 00 00 73 0D" ) , CLIENT_DLL } , &Hook_OnAddEntity , reinterpret_cast<LPVOID*>( &OnAddEntity_o ) },
 		{ { XorStr( "Hook::OnRemoveEntity" ) , XorStr( "48 89 74 24 10 57 48 83 EC 20 41 B9 FF 7F 00 00 41 8B C0 41 23 C1 48 8B F2 41 83 F8 FF 48 8B F9 44 0F 45 C8 41 81 F9 00 40 00 00 73 08" ) , CLIENT_DLL } , &Hook_OnRemoveEntity , reinterpret_cast<LPVOID*>( &OnRemoveEntity_o ) },
 		{ { XorStr( "Hook::FrameStageNotify" ) , XorStr( "48 89 5C 24 ? 57 48 81 EC ? ? ? ? 48 8B F9 8B DA" ) , CLIENT_DLL } , &Hook_FrameStageNotify , reinterpret_cast<LPVOID*>( &FrameStageNotify_o ) },
-		{ { XorStr( "Hook::GetMatricesForView" ) , XorStr( "40 53 48 81 EC ? ? ? ? 49 8B C1" ) , CLIENT_DLL } , &Hook_GetMatricesForView , reinterpret_cast<LPVOID*>( &GetMatricesForView_o ) },
+        { { XorStr( "Hook::OverrideView" ) , XorStr( "40 53 48 81 EC ? ? ? ? 49 8B C1" ) , CLIENT_DLL } , &Hook_OverrideView , reinterpret_cast<LPVOID*>( &OverrideView_o ) },
 		{ { XorStr( "Hook::CreateMove" ) , XorStr( "85 D2 0F 85 ? ? ? ? 48 8B C4 44 88 40 18" ) , CLIENT_DLL } , &Hook_CreateMove , reinterpret_cast<LPVOID*>( &CreateMove_o ) },
 		{ { XorStr( "Hook::SerializePartialToArray" ) , XorStr( "48 89 5C 24 ? 55 56 57 48 81 EC ? ? ? ? 48 8B 05 ? ? ? ? 48 33 C4 48 89 84 24 ? ? ? ? 49 63 F0" ) , CLIENT_DLL } , &Hook_MessageLite_SerializePartialToArray , reinterpret_cast<LPVOID*>( &MessageLite_SerializePartialToArray_o ) },
 		{ { XorStr( "Hook::OnClientOutput" ) , XorStr( "48 89 5C 24 18 55 56 57 41 54 41 56 48 83 EC 70" ) , ENGINE2_DLL } , &Hook_OnClientOutput , reinterpret_cast<LPVOID*>( &OnClientOutput_o ) },
@@ -72,6 +78,9 @@ auto CHook_Loader::InstallSecondHook() -> bool
 		{ { XorStr( "Hook::IsRelativeMouseMode" ) , XorStr( "48 89 6C 24 ? 48 89 74 24 ? 48 89 7C 24 ? 41 56 48 83 EC ? 0F B6 F2" ) , INPUTSYSTEM_DLL } , &Hook_IsRelativeMouseMode , reinterpret_cast<LPVOID*>( &IsRelativeMouseMode_o ) },
 		{ { XorStr( "Hook::UpdateInPVS" ) , XorStr( "48 89 5C 24 ? 48 89 74 24 ? 57 48 83 EC ? 48 8B 01 8B F2 48 8B D9 FF 90 ? ? ? ? 33 FF" ) , CLIENT_DLL } , &Hook_UpdateInPVS , reinterpret_cast<LPVOID*>( &UpdateInPVS_o ) },
 		{ { XorStr( "Hook::AntiTamper" ) , XorStr( "40 53 48 83 EC 50 48 89 6C 24 60 48 8B E9 48 89 74" ) , CLIENT_DLL } , &Hook_AntiTamper , reinterpret_cast<LPVOID*>( &AntiTamper_o ) },
+#if HAS_DRAW_OBJECT
+        { { XorStr( "Hook::DrawObject" ) , XorStr( "48 8B C4 53 57 41 54" ) , MATERIALSYSTEM2_DLL } , &Hook_DrawObject , reinterpret_cast<LPVOID*>( &DrawObject_o ) , true , true },
+#endif
 	};
 
 	return InstallHooks();

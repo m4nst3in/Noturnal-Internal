@@ -156,10 +156,9 @@ std::vector<GrenadePathNode> CTrajectoryPhysics::Simulate(C_CSPlayerPawn* pLocal
     if (!isGrenade)
         return {};
 
-    // Força
     float flInputStrength = 0.0f;
-    if (bAttack1 && bAttack2)      flInputStrength = 0.5f;     
-    else if (bAttack2)             flInputStrength = 0.333333f;       
+    if (bAttack1 && bAttack2)      flInputStrength = 0.5f;
+    else if (bAttack2)             flInputStrength = 0.333333f;
     else if (bAttack1)             flInputStrength = 1.0f;
     if (flInputStrength <= 0.0f)   return {};
 
@@ -188,6 +187,8 @@ std::vector<GrenadePathNode> CTrajectoryPhysics::Simulate(C_CSPlayerPawn* pLocal
     // --- 2. TRACE INICIAL + OFFSET DA MÃO ---
     Vector3 vEyePos = currentPos;
     vEyePos.Add(vViewOffset);
+    float throwHeight = (flInputStrength * 12.0f) - 12.0f;
+    vEyePos.m_z += throwHeight;
 
     // Máscara CS2 para projéteis
     CTraceFilter filter(0x200400B, pLocal, 3, 15); 
@@ -255,21 +256,36 @@ std::vector<GrenadePathNode> CTrajectoryPhysics::Simulate(C_CSPlayerPawn* pLocal
     ray.Maxs = Vector3( 2.0f,  2.0f,  2.0f);
     
     CGameTrace tr;
-    int   nTicks    = TIME_TO_TICKS(5.0f); // 5 segundos max
+    auto GetDetonateTime = [&](int id) -> float {
+        switch (id) {
+        case WEAPON_FLASHBANG:
+        case WEAPON_HIGH_EXPLOSIVE_GRENADE:
+            return 1.5f;
+        case WEAPON_INCENDIARY_GRENADE:
+        case WEAPON_MOLOTOV:
+            return 3.0f;
+        case WEAPON_TACTICAL_AWARENESS_GRENADE:
+            return 5.0f;
+        default:
+            return 3.0f;
+        }
+    };
+    int   nTicks    = TIME_TO_TICKS(GetDetonateTime(nWeaponID));
     float flInterval = TICK_INTERVAL;
+    float effectiveGravity = gravity * 0.4f;
 
     // --- SIMULAÇÃO LOOP ---
     for (int i = 0; i < nTicks; ++i)
     {
         Vector3 vPrevPos = vPos;
 
-        // 1. Gravidade
-        vVelocity.m_z -= gravity * flInterval;
+        float vzPrev = vVelocity.m_z;
+        vVelocity.m_z -= effectiveGravity * flInterval;
 
         // 2. Sem arrasto de ar (drag) para ficar próximo do CS/CS2.
 
-        // 3. Move
-        Vector3 vMove = vVelocity; 
+        Vector3 vMove = vVelocity;
+        vMove.m_z = (vzPrev + vVelocity.m_z) * 0.5f;
         vMove.Multiplyf(flInterval);
         Vector3 vNextPos = vPos; 
         vNextPos.Add(vMove);
@@ -287,63 +303,59 @@ std::vector<GrenadePathNode> CTrajectoryPhysics::Simulate(C_CSPlayerPawn* pLocal
                 if (Math::WorldToScreen(vPos, sHit)) 
                     currentPath.push_back({ sHit, vPos, tr.vecNormal, true });
 
-                // Lógica de Parada
                 bool bStopped = false;
-                
-                // Molotov/Incendiary explodem ao bater no chão (Normal Z > 0.7)
                 if (nWeaponID == WEAPON_MOLOTOV || nWeaponID == WEAPON_INCENDIARY_GRENADE)
                 {
-                    if (tr.vecNormal.m_z > 0.7f)
+                    if (tr.vecNormal.m_z >= 0.7f)
                         bStopped = true;
                 }
-
-                // Condição de parada por baixa velocidade
                 if (vVelocity.LengthSquared() < 0.01f)
                     bStopped = true;
-
+                if (nWeaponID == WEAPON_TACTICAL_AWARENESS_GRENADE)
+                    bStopped = true;
                 if (bStopped)
                     break;
 
-                // 5. Physics Clip (Rebote) + Elasticidade separada
-                float flNewElasticity = elasticity;
-                // Smoke quica menos se bater direto no chão
-                if (nWeaponID == WEAPON_SMOKE_GRENADE && tr.vecNormal.m_z > 0.7f)
-                    flNewElasticity = 0.30f;
-
-                // Elasticidade total (grenade * surface)
                 float flSurfaceElasticity = 1.0f;
-                float flTotalElasticity   = flNewElasticity * flSurfaceElasticity;
-                if (flTotalElasticity > 0.9f) flTotalElasticity = 0.9f;
-                if (flTotalElasticity < 0.0f) flTotalElasticity = 0.0f;
-
+                if (tr.pHitEntity)
+                    flSurfaceElasticity = 0.3f;
+                float flTotalElasticity = std::clamp(flSurfaceElasticity * 0.45f, 0.0f, 0.9f);
                 Vector3 vNewVel;
-                // overbounce fixo tipo Source (2.0f)
                 PhysicsClipVelocity(vVelocity, tr.vecNormal, vNewVel, 2.0f);
                 vNewVel.Multiplyf(flTotalElasticity);
                 vVelocity = vNewVel;
 
-                // 6. Atrito (Friction) se tocar no chão – estilo Source-like
-                if (tr.vecNormal.m_z > 0.7f)
-                {
-                    float flSpeed = vVelocity.Length();
-                    if (flSpeed > 0.1f)
-                    {
-                        // StopSpeed baixo para granada (não player)
-                        float flControl  = std::fmax(flSpeed, 30.0f);
-                        float flDrop     = flControl * friction * flInterval;
-                        float flNewSpeed = std::fmax(0.0f, flSpeed - flDrop);
+                float remainingDt = (1.0f - tr.flFraction) * flInterval;
+                Vector3 vRemainderMove = vNewVel;
+                vRemainderMove.Multiplyf(remainingDt);
+                Vector3 vRemainderEnd = vPos;
+                vRemainderEnd.Add(vRemainderMove);
 
-                        if (flNewSpeed > 0.0f && flSpeed > 0.0f)
-                            vVelocity.Multiplyf(flNewSpeed / flSpeed);
-                        else
-                            vVelocity = Vector3(0.0f, 0.0f, 0.0f);
+                CGameTrace tr2;
+                memset(&tr2, 0, sizeof(CGameTrace));
+                if (IGamePhysicsQuery_TraceShape(SDK::Pointers::CVPhys2World(), ray,
+                                                 vPos, vRemainderEnd, &filter, &tr2))
+                {
+                    if (tr2.DidHit())
+                    {
+                        vPos = tr2.vecPosition;
+                        ImVec2 sHit2;
+                        if (Math::WorldToScreen(vPos, sHit2))
+                            currentPath.push_back({ sHit2, vPos, tr2.vecNormal, true });
+
+                        Vector3 push2 = tr2.vecNormal;
+                        push2.Multiplyf(0.1f);
+                        vPos.Add(push2);
+                    }
+                    else
+                    {
+                        vPos = vRemainderEnd;
                     }
                 }
-                
-                // 7. Push out (Evitar ficar preso)
-                Vector3 push = tr.vecNormal; 
-                push.Multiplyf(0.1f);
-                vPos.Add(push);
+                else
+                {
+                    vPos = vRemainderEnd;
+                }
             }
             else
             {
