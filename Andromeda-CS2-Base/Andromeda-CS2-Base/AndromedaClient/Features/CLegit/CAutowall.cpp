@@ -12,6 +12,15 @@
 
 static CAutowall g_Autowall{};
 
+// Trace filter constants (consistent with CL_Trace.cpp)
+constexpr uint64_t TRACE_MASK_SHOT = 0x1C1003;
+constexpr int TRACE_LAYER = 3;
+constexpr uint16_t TRACE_NUM = 15;
+
+// Damage calculation constants
+constexpr float DAMAGE_FALLOFF_DISTANCE = 500.0f;
+constexpr float DEFAULT_PENETRATION_MODIFIER = 0.16f;
+
 auto CAutowall::CanDamage( const Vector3& vecStart , const Vector3& vecEnd , C_CSPlayerPawn* pTarget ) -> AutowallDamageInfo_t
 {
 	AutowallDamageInfo_t result{};
@@ -49,9 +58,9 @@ auto CAutowall::CanDamage( const Vector3& vecStart , const Vector3& vecEnd , C_C
 	}
 
 	// Trace to target
-	Ray_t Ray;
+	Ray_t Ray{};
 	CGameTrace GameTrace;
-	CTraceFilter Filter( 0x1C1003 , pLocalPlayerPawn , 3 , 15 );
+	CTraceFilter Filter( TRACE_MASK_SHOT , pLocalPlayerPawn , TRACE_LAYER , TRACE_NUM );
 
 	Vector3 currentStart = vecStart;
 	int nPenetrations = 0;
@@ -122,10 +131,10 @@ auto CAutowall::CanPenetrate( const Vector3& vecEnd , C_CSPlayerPawn* pTarget , 
 auto CAutowall::ScaleDamage( float flDamage , float flDistance , float flRangeModifier , float flRange ) -> float
 {
 	// Apply range modifier based on distance
-	// CS2 damage falloff: damage *= rangeModifier ^ (distance / 500)
+	// CS2 damage falloff: damage *= rangeModifier ^ (distance / DAMAGE_FALLOFF_DISTANCE)
 	if ( flDistance > 0.0f && flRangeModifier < 1.0f )
 	{
-		float flDistanceFactor = flDistance / 500.0f;
+		float flDistanceFactor = flDistance / DAMAGE_FALLOFF_DISTANCE;
 		flDamage *= powf( flRangeModifier , flDistanceFactor );
 	}
 
@@ -195,12 +204,9 @@ auto CAutowall::SimulatePenetration( Vector3& vecStart , Vector3& vecDir , float
 	if ( nPenetrations >= MAX_PENETRATIONS )
 		return false;
 
-	// Base penetration damage loss (simplified)
-	// Real implementation would use surface data from trace
-	float flPenDamageMod = 0.16f; // Default penetration modifier
-	
 	// Apply penetration damage loss
-	flDamage -= flDamage * flPenDamageMod;
+	// Real implementation would use surface data from trace
+	flDamage -= flDamage * DEFAULT_PENETRATION_MODIFIER;
 
 	// Minimum damage threshold
 	if ( flDamage < 1.0f )

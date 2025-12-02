@@ -167,8 +167,8 @@ namespace Settings
         inline auto TriggerbotAutoScope = true;
         inline int TriggerbotDelayMs = 50; // Delay em milissegundos
         
-        // Modo de disparo
-        inline auto TriggerbotBurstMode = false; // Para armas semi-auto
+        // Firing mode
+        inline auto TriggerbotBurstMode = false; // For semi-auto weapons
         inline int TriggerbotBurstCount = 3;
         
         // Triggerbot Hitbox Filter
