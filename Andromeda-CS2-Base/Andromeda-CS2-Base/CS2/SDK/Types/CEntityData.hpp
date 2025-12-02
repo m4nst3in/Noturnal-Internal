@@ -200,6 +200,7 @@ public:
 	SCHEMA_OFFSET( "CCSWeaponBaseVData" , "m_WeaponType" , m_WeaponType , CSWeaponType );
 	SCHEMA_OFFSET( "CCSWeaponBaseVData" , "m_szName" , m_szName , CGlobalSymbol );
 	SCHEMA_OFFSET( "CCSWeaponBaseVData" , "m_nDamage" , m_nDamage , int32 );
+	SCHEMA_OFFSET( "CCSWeaponBaseVData" , "m_nNumBullets" , m_nNumBullets , int32 );
 	SCHEMA_OFFSET( "CCSWeaponBaseVData" , "m_flHeadshotMultiplier" , m_flHeadshotMultiplier , float32 );
 	SCHEMA_OFFSET( "CCSWeaponBaseVData" , "m_flArmorRatio" , m_flArmorRatio , float32 );
 	SCHEMA_OFFSET( "CCSWeaponBaseVData" , "m_flPenetration" , m_flPenetration , float32 );

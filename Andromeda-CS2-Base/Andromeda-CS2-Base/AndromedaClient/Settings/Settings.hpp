@@ -167,13 +167,21 @@ namespace Settings
         inline auto TriggerbotAutoScope = true;
         inline int TriggerbotDelayMs = 50; // Delay em milissegundos
         
-        // Modo de disparo
-        inline auto TriggerbotBurstMode = false; // Para armas semi-auto
+        // Firing mode
+        inline auto TriggerbotBurstMode = false; // For semi-auto weapons
         inline int TriggerbotBurstCount = 3;
+        
+        // Triggerbot Hitbox Filter
+        inline int TriggerbotHitboxFilter = 0; // 0 = All, 1 = Head Only, 2 = Body Only
         
         // Smooth (para versões futuras)
         inline auto TriggerbotSmoothEnabled = false;
         inline float TriggerbotSmoothAmount = 5.0f;
+        
+        // Autowall
+        inline auto AutowallEnabled = false;
+        inline float AutowallMinDamage = 20.0f;
+        inline auto AutowallFriendlyFire = false;
     }
     
     

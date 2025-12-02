@@ -11,6 +11,7 @@
 #include <AndromedaClient/Render/CRenderStackSystem.hpp>
 #include <AndromedaClient/Features/CVisual/CVisual.hpp>
 #include <AndromedaClient/Features/CInventory/InventoryChanger.hpp>
+#include <AndromedaClient/Features/CLegit/CTriggerbot.hpp>
 #include <GameClient/CL_Weapons.hpp>
 #include <CS2/SDK/FunctionListSDK.hpp>
 
@@ -83,6 +84,7 @@ auto CAndromedaClient::OnCreateMove( CCSGOInput* pInput , CUserCmd* pUserCmd ) -
 {
     GetVisual()->OnCreateMove(pInput, pUserCmd);
     GetInventoryChanger()->OnCreateMove(pInput, pUserCmd);
+    GetTriggerbot()->OnCreateMove(pInput, pUserCmd);
 }
 
 auto GetAndromedaClient() -> CAndromedaClient*

@@ -156,6 +156,8 @@
     <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Features\CInventory\InventoryChanger.cpp" />
     <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Features\CInventory\SkinApiClient.cpp" />
     <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Features\CInventory\SkinImageCache.cpp" />
+    <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Features\CLegit\CTriggerbot.cpp" />
+    <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Features\CLegit\CAutowall.cpp" />
     <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Render\CRender.cpp" />
     <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\D3D\Hook_DrawIndexed.cpp" />
     <ClCompile Include="Andromeda-CS2-Base\AndromedaClient\Features\CVisual\CChams3D.cpp" />
@@ -279,6 +281,8 @@
     <ClInclude Include="Andromeda-CS2-Base\AndromedaClient\Render\CRenderStackSystem.hpp" />
     <ClInclude Include="Andromeda-CS2-Base\AndromedaClient\D3D\Hook_DrawIndexed.hpp" />
     <ClInclude Include="Andromeda-CS2-Base\AndromedaClient\Features\CVisual\CChams3D.hpp" />
+    <ClInclude Include="Andromeda-CS2-Base\AndromedaClient\Features\CLegit\CTriggerbot.hpp" />
+    <ClInclude Include="Andromeda-CS2-Base\AndromedaClient\Features\CLegit\CAutowall.hpp" />
     <ClInclude Include="Andromeda-CS2-Base\AndromedaClient\Fonts\MontserratBytes.hpp" />
     <ClInclude Include="Andromeda-CS2-Base\AndromedaClient\Fonts\FontAwesomeBytes.hpp" />
     <ClInclude Include="Andromeda-CS2-Base\AndromedaClient\Settings\CSettingsJson.hpp" />
