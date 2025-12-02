@@ -523,11 +523,72 @@ auto CAndromedaMenu::OnRenderMenu() -> void
                 UpdateTabAnimation( ImGui::GetItemRectMin() , ImGui::GetItemRectMax() );
                 ImGui::Dummy( ImVec2( 0 , 4.0f ) );
                 
-                BeginGroupBox( "legit_todo" , "LEGIT" , ImVec2( 0 , 80 ) );
-                ImGui::TextColored( Theme::TextMid , "TODO: Legitbot not implemented yet" );
-                ImGui::TextColored( Theme::TextDark , "Features: Triggerbot, Aim Assist, etc." );
+                ImGui::Columns( 2 , nullptr , false );
+                ImGui::SetColumnWidth( 0 , 400.0f );
+                
+                // Triggerbot Group
+                BeginGroupBox( "legit_triggerbot" , "TRIGGERBOT" , ImVec2( 0 , 280 ) );
+                StyledCheckbox( "Enable" , &Settings::Legit::TriggerbotEnabled );
+                
+                // Hotkey selector - simplified combo
+                const char* keyNames[] = { "Mouse Left" , "Mouse Right" , "Mouse Middle" , "Mouse 4" , "Mouse 5" , "Shift" , "Ctrl" , "Alt" };
+                static int selectedKey = 0; // Default to Mouse Left
+                if ( StyledCombo( "Hotkey" , &selectedKey , keyNames , IM_ARRAYSIZE( keyNames ) ) )
+                {
+                    // Map selected index to ImGuiKey
+                    switch ( selectedKey )
+                    {
+                        case 0: Settings::Legit::TriggerbotKey = ImGuiKey_MouseLeft; break;
+                        case 1: Settings::Legit::TriggerbotKey = ImGuiKey_MouseRight; break;
+                        case 2: Settings::Legit::TriggerbotKey = ImGuiKey_MouseMiddle; break;
+                        case 3: Settings::Legit::TriggerbotKey = ImGuiKey_MouseX1; break;
+                        case 4: Settings::Legit::TriggerbotKey = ImGuiKey_MouseX2; break;
+                        case 5: Settings::Legit::TriggerbotKey = ImGuiKey_LeftShift; break;
+                        case 6: Settings::Legit::TriggerbotKey = ImGuiKey_LeftCtrl; break;
+                        case 7: Settings::Legit::TriggerbotKey = ImGuiKey_LeftAlt; break;
+                    }
+                }
+                
+                ImGui::PushItemWidth( 160.0f );
+                float delayFloat = static_cast<float>( Settings::Legit::TriggerbotDelayMs );
+                if ( StyledSlider( "Delay" , &delayFloat , 0.f , 500.f , "%.0f ms" ) )
+                    Settings::Legit::TriggerbotDelayMs = static_cast<int>( delayFloat );
+                ImGui::PopItemWidth();
+                
+                StyledCheckbox( "Visible Only" , &Settings::Legit::TriggerbotVisibleOnly );
+                StyledCheckbox( "Auto Scope" , &Settings::Legit::TriggerbotAutoScope );
+                
+                // Hitbox filter
+                const char* hitboxFilters[] = { "All" , "Head Only" , "Body Only" };
+                StyledCombo( "Hitbox Filter" , &Settings::Legit::TriggerbotHitboxFilter , hitboxFilters , IM_ARRAYSIZE( hitboxFilters ) );
+                
+                StyledCheckbox( "Burst Mode" , &Settings::Legit::TriggerbotBurstMode );
+                
+                if ( Settings::Legit::TriggerbotBurstMode )
+                {
+                    ImGui::PushItemWidth( 160.0f );
+                    float burstFloat = static_cast<float>( Settings::Legit::TriggerbotBurstCount );
+                    if ( StyledSlider( "Burst Count" , &burstFloat , 1.f , 10.f , "%.0f" ) )
+                        Settings::Legit::TriggerbotBurstCount = static_cast<int>( burstFloat );
+                    ImGui::PopItemWidth();
+                }
+                
                 EndGroupBox();
                 
+                ImGui::NextColumn();
+                
+                // Autowall Group
+                BeginGroupBox( "legit_autowall" , "AUTOWALL" , ImVec2( 0 , 120 ) );
+                StyledCheckbox( "Enable" , &Settings::Legit::AutowallEnabled );
+                
+                ImGui::PushItemWidth( 160.0f );
+                StyledSlider( "Min Damage" , &Settings::Legit::AutowallMinDamage , 1.f , 100.f , "%.0f HP" );
+                ImGui::PopItemWidth();
+                
+                StyledCheckbox( "Friendly Fire" , &Settings::Legit::AutowallFriendlyFire );
+                EndGroupBox();
+                
+                ImGui::Columns( 1 );
                 ImGui::EndTabItem();
             }
             
